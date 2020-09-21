@@ -1,5 +1,16 @@
 open Core
 
+module Array = struct
+  include Array
+
+  let to_string_map ~(sep : string) (l : 'a array) ~(f : 'a -> string) : string =
+    String.concat_array ~sep (map l ~f)
+
+  let to_string_map2 ~(sep : string) (l1 : 'a array) (l2 : 'b array)
+                     ~(f : 'a -> 'b -> string) : string =
+    String.concat_array ~sep (map2_exn l1 l2 ~f)
+end
+
 module Hashtbl = struct
   include Hashtbl
 
@@ -30,17 +41,6 @@ module List = struct
     | _ -> let equal x x' = compare x x' = 0 in
            let sorted = stable_sort ~compare list
             in remove_consecutive_duplicates ~which_to_keep ~equal sorted
-end
-
-module Array = struct
-  include Array
-
-  let to_string_map ~(sep : string) (l : 'a array) ~(f : 'a -> string) : string =
-    String.concat_array ~sep (map l ~f)
-
-  let to_string_map2 ~(sep : string) (l1 : 'a array) (l2 : 'b array)
-                     ~(f : 'a -> 'b -> string) : string =
-    String.concat_array ~sep (map2_exn l1 l2 ~f)
 end
 
 module Sexp = struct
@@ -78,6 +78,21 @@ let rec remove_lets : Sexp.t -> Sexp.t = function
   | List [ (Atom "let") ; List bindings ; body ]
     -> replace bindings (remove_lets body)
   | List l -> List (List.map l ~f:remove_lets)
+
+let rec binarize_boolean_ops : Sexp.t -> Sexp.t = function
+  | Atom _ as atom -> atom
+  | List [ (Atom "and") ; arg ] | List [ (Atom "or") ; arg ] -> arg
+  | List ((Atom "and") :: args)
+    -> List ( (Atom "and") :: (List.concat_map args ~f:(fun a -> match binarize_boolean_ops a with
+                                                                 | List ((Atom "and") :: inner_args)
+                                                                   -> inner_args
+                                                                 | a -> [a])) )
+  | List ((Atom "or") :: args)
+    -> List ( (Atom "or") :: (List.concat_map args ~f:(fun a -> match binarize_boolean_ops a with
+                                                                | List ((Atom "or") :: inner_args)
+                                                                  -> inner_args
+                                                                | a -> [a])) )
+  | List l -> List (List.map l ~f:binarize_boolean_ops)
 
 let make_user_features feature_strings vars : (string * string) list =
   let feature_strings =

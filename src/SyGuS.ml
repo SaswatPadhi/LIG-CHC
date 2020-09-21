@@ -11,17 +11,9 @@ type var = string * Type.t
 type chc = {
   args : var list ;
   body : string ;
-  head : string ;
+  head : (int * (string list)) list ;
   name : string ;
-  tail : string ;
-}
-
-let empty_chc = {
-  args = [] ;
-  body = "" ;
-  head = "" ;
-  name = "" ; 
-  tail = "" ;
+  tail : (int * (string list)) list ;
 }
 
 type func = {
@@ -32,21 +24,13 @@ type func = {
   expressible : bool ;
 }
 
-let empty_func = {
-  args = [] ;
-  name = "" ;
-  body = "" ;
-  return = Type.BOOL ;
-  expressible = true ;
-}
-
 type t = {
   logic : string ;
   constants : Value.t list ;
   defined_functions : func list ;
-  uninterpreted_functions : func list ;
-  chcs : chc list ;
-  query : chc ;
+  uninterpreted_functions : func array ;
+  constraints : chc list ;
+  queries : chc list ;
 }
 
 let rec extract_consts : Sexp.t -> Value.t list = function
@@ -74,11 +58,20 @@ let parse_define_fun : Sexp.t list -> func * Value.t list = function
   | sexp_list -> raise (Parse_Exn ("Invalid function definition: "
                                   ^ (Sexp.to_string_hum (List(Atom("define-fun") :: sexp_list)))))
 
+let var_declaration ((n, t) : var) : string =
+  "(declare-const " ^ n ^ " " ^ (Type.to_string t) ^ ")"
+
 let func_definition (f : func) : string =
   "(define-fun " ^ f.name ^ " ("
   ^ (List.to_string_map
        f.args ~sep:" " ~f:(fun (v, t) -> "(" ^ v ^ " " ^ (Type.to_string t) ^ ")"))
   ^ ") " ^ (Type.to_string f.return) ^ " " ^ f.body ^ ")"
+
+let chc_func_definition (c : chc) : string =
+  "(define-fun " ^ c.name ^ " ("
+  ^ (List.to_string_map
+       c.args ~sep:" " ~f:(fun (v, t) -> "(" ^ v ^ " " ^ (Type.to_string t) ^ ")"))
+  ^ ") Bool " ^ c.body ^ ")"
 
 let parse_sexps (sexps : Sexp.t list) : t =
   let chc_idx = 0 in
@@ -86,14 +79,15 @@ let parse_sexps (sexps : Sexp.t list) : t =
   let consts : Value.t list ref = ref [] in
   let defined_funcs : func list ref = ref [] in
   let uninterpreted_funcs : func list ref = ref [] in
-  let chcs : chc list ref = ref [] in
-  let query : chc ref = ref empty_chc
+  let constraints : chc list ref = ref [] in
+  let queries : chc list ref = ref []
    in List.iter sexps
         ~f:(function
               | List [ (Atom "check-synth") ] -> ()
+              | List ( (Atom "set-info") :: _ ) -> ()
               | List [ (Atom "set-logic") ; (Atom _logic) ]
-                -> if String.equal !logic "" then logic := _logic
-                   else raise (Parse_Exn ("Logic already set to: " ^ !logic))
+                -> if not (String.equal !logic "") then raise (Parse_Exn ("Logic already set to: " ^ !logic))
+                 ; logic := String.chop_prefix_exn ~prefix:"CHC_" _logic
               | List ( (Atom "define-fun") :: func_sexps )
                 -> let (func, fconsts) = parse_define_fun func_sexps
                     in if List.mem !defined_funcs func ~equal:(fun x y -> String.equal x.name y.name)
@@ -115,22 +109,71 @@ let parse_sexps (sexps : Sexp.t list) : t =
                                             return = Type.BOOL ;
                                             expressible = true }
                                        :: !uninterpreted_funcs
-              | List [ (Atom "constraint") ; List [ (Atom "forall") ; (List vars) ; List [ (Atom "=>") ; tail ; (Atom "false") ] ] ]
-                -> consts := (extract_consts tail) @ !consts
-                 ; query := { args = List.map ~f:parse_variable_declaration vars
-                            ; name = "_chc_index__" ^ (Int.to_string chc_idx) ^ "_"
-                            ; head = "false"
-                            ; tail = Sexp.to_string tail
-                            ; body = "(not " ^ (Sexp.to_string tail) ^ ")"
-                            }
-              | List [ (Atom "constraint") ; List [ (Atom "forall") ; (List vars) ; List [ (Atom "=>") ; tail ; head ] ] ]
-                -> consts := (extract_consts tail) @ !consts
-                 ; query := { args = List.map ~f:parse_variable_declaration vars
-                            ; name = "_chc_index__" ^ (Int.to_string chc_idx) ^ "_"
-                            ; head = Sexp.to_string head
-                            ; tail = Sexp.to_string tail
-                            ; body = "(not " ^ (Sexp.to_string tail) ^ ")"
-                            }
+              | List [ (Atom "constraint") ; List [ (Atom "forall") ; (List vars) ; chc_body ] ]
+                -> begin match remove_lets chc_body with
+                     | List [ (Atom "=>") ; tail ; head ]
+                       -> consts := (extract_consts tail) @ !consts
+                        ; let tail_data =
+                              match tail with
+                              | Atom a
+                                -> begin match List.findi !uninterpreted_funcs ~f:(fun _ f -> String.equal a f.name) with
+                                     | Some (i,_) -> [ (i,[]) ]
+                                     | _ -> []
+                                   end
+                              | List ((Atom "and") :: conjuncts)
+                                -> List.filter_map
+                                     conjuncts
+                                     ~f:(function [@warning "-8"]
+                                         | Atom a
+                                           -> begin match List.findi !uninterpreted_funcs ~f:(fun _ f -> String.equal a f.name) with
+                                                | Some (i,_) -> Some (i,[])
+                                                | _ -> None
+                                              end
+                                         | List ((Atom a) :: ops)
+                                           -> begin match List.findi !uninterpreted_funcs ~f:(fun _ f -> String.equal a f.name) with
+                                                | Some (i,_) -> Some (i,(List.map ops ~f:Sexp.to_string_hum))
+                                                | _ -> None
+                                              end)
+                              | List ((Atom a) :: ops)
+                                -> begin match List.findi !uninterpreted_funcs ~f:(fun _ f -> String.equal a f.name) with
+                                     | Some (i,_) -> [ (i,(List.map ops ~f:Sexp.to_string_hum)) ]
+                                     | _ -> []
+                                   end
+                              | _ -> raise (Parse_Exn ("Constraint not in CHC form: " ^ (Sexp.to_string_hum tail)))
+                           in begin match head with
+                                | Atom "false"
+                                  -> queries := { args = List.map ~f:parse_variable_declaration vars
+                                                ; name = "_query_index__" ^ (Int.to_string chc_idx) ^ "_"
+                                                ; head = []
+                                                ; tail = tail_data
+                                                ; body = "(not " ^ Sexp.to_string tail ^ ")"
+                                                } :: !queries
+                                | Atom a
+                                  -> let head_data = begin match List.findi !uninterpreted_funcs ~f:(fun _ f -> String.equal a f.name) with
+                                                       | Some (i,_) -> [ (i,[]) ]
+                                                       | _ -> []
+                                                     end
+                                      in constraints := { args = List.map ~f:parse_variable_declaration vars
+                                                        ; name = "_chc_index__" ^ (Int.to_string chc_idx) ^ "_"
+                                                        ; head = head_data
+                                                        ; tail = tail_data
+                                                        ; body = "(not (=> " ^ (Sexp.to_string tail) ^ " " ^ a ^ ")"
+                                                        } :: !constraints
+                                | List ((Atom a) :: ops)
+                                  -> let head_data = begin match List.findi !uninterpreted_funcs ~f:(fun _ f -> String.equal a f.name) with
+                                                       | Some (i,_) -> [ (i,(List.map ops ~f:Sexp.to_string_hum)) ]
+                                                       | _ -> []
+                                                     end
+                                      in constraints := { args = List.map ~f:parse_variable_declaration vars
+                                                        ; name = "_chc_index__" ^ (Int.to_string chc_idx) ^ "_"
+                                                        ; head = head_data
+                                                        ; tail = tail_data
+                                                        ; body = "(=> " ^ (Sexp.to_string tail) ^ " " ^ (Sexp.to_string_hum head) ^ ")"
+                                                        } :: !constraints
+                                | _ -> raise (Parse_Exn ("Constraint not in CHC form: " ^ (Sexp.to_string_hum head)))
+                              end
+                     | _ -> raise (Parse_Exn ("Constraint not in CHC form: " ^ (Sexp.to_string_hum chc_body)))
+                   end
               | sexp -> raise (Parse_Exn ("Unknown command: " ^ (Sexp.to_string_hum sexp))))
     ; consts := List.dedup_and_sort ~compare:Poly.compare !consts
     ; Log.debug (lazy ("Detected Constants: " ^ (List.to_string_map ~sep:", " ~f:Value.to_string !consts)))
@@ -139,9 +182,9 @@ let parse_sexps (sexps : Sexp.t list) : t =
     ; { constants = !consts
       ; logic = !logic
       ; defined_functions = !defined_funcs
-      ; uninterpreted_functions = !uninterpreted_funcs
-      ; chcs = !chcs
-      ; query = !query
+      ; uninterpreted_functions = Array.of_list !uninterpreted_funcs
+      ; constraints = !constraints
+      ; queries = !queries
       }
 
 let parse (chan : Stdio.In_channel.t) : t =
@@ -157,6 +200,14 @@ let read_from (filename : string) : t =
   let sygus = Caml.Marshal.from_channel in_chan
    in Stdio.In_channel.close in_chan
     ; sygus
+
+
+let setup_z3 ?(user_features = []) (s : t) (z3 : ZProc.t) : unit =
+  ignore (ZProc.run_queries z3 [] ~scoped:false ~db:((
+    ("(set-logic " ^ (Logic.of_string s.logic).z3_name ^ ")")
+    :: (List.map ~f:func_definition s.defined_functions)
+     @ (List.map ~f:chc_func_definition (s.queries @ s.constraints))
+     @ user_features)))
 
 let translate_smtlib_expr (expr : string) : string =
   if (String.equal expr "true") || (String.equal expr "false") then expr else

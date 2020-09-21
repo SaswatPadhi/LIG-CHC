@@ -23,11 +23,11 @@ VERIFY="$BIN_DIR/lig-verify"
 
 INVGAME_FEATURE_PARSER="$BIN_DIR/lig-tools-invgame-feature-parser"
 
-if [ ! -f $PROCESS ] || [ ! -f $RECORD ] || [ ! -f $INFER ] || [ ! -f $VERIFY ]; then
-  echo -en "
-One or more dependencies not found. Building OCaml modules ...
-" >&2 ; dune build || exit $EXIT_CODE_BUILD_ERROR
-fi
+#if [ ! -f $PROCESS ] || [ ! -f $RECORD ] || [ ! -f $INFER ] || [ ! -f $VERIFY ]; then
+#  echo -en "
+#One or more dependencies not found. Building OCaml modules ...
+#" >&2 ; dune build || exit $EXIT_CODE_BUILD_ERROR
+#fi
 
 trap 'jobs -p | xargs kill -TERM &> /dev/null' INT
 trap "kill -KILL -`ps -o ppid= $$` &> /dev/null" QUIT TERM
@@ -250,25 +250,29 @@ $PROCESS -o "$TESTCASE_PROCESSED" ${DO_LOG[process]} $PROCESS_ARGS \
 if [ -s "$TESTCASE_INVARIANT" ]; then
   INFER_RESULT_CODE=0
 else
-  show_status "(recording)"
+#  show_status "(recording)"
 
-  LOG_PARAM=""
-  for i in `seq 1 $RECORD_FORKS` ; do
-    [ -z "${DO_LOG[record]}" ] || LOG_PARAM="${DO_LOG[record]}$i"
-    (timeout $RECORD_TIMEOUT \
-             $RECORD -s $RECORD_STATES_PER_FORK -r "seed$i" $LOG_PARAM $RECORD_ARGS \
-                     "$TESTCASE_PROCESSED") > "$TESTCASE_REC_STATES$i" &
-  done
-  wait
+#  LOG_PARAM=""
+#  for i in `seq 1 $RECORD_FORKS` ; do
+#    [ -z "${DO_LOG[record]}" ] || LOG_PARAM="${DO_LOG[record]}$i"
+#    (timeout $RECORD_TIMEOUT \
+#             $RECORD -s $RECORD_STATES_PER_FORK -r "seed$i" $LOG_PARAM $RECORD_ARGS \
+#                     "$TESTCASE_PROCESSED") > "$TESTCASE_REC_STATES$i" &
+#  done
+#  wait
 
-  grep -hsv "^[[:space:]]*$" "$TESTCASE_REC_STATES"* "$EXTRA_POS_STATES_PATH" | sort -u > "$TESTCASE_ALL_STATES"
-  [ -z "${DO_LOG[record]}" ] || cat "$TESTCASE_REC_LOG"* >> "$TESTCASE_ALL_LOG" 2> /dev/null || true
+#  grep -hsv "^[[:space:]]*$" "$TESTCASE_REC_STATES"* "$EXTRA_POS_STATES_PATH" | sort -u > "$TESTCASE_ALL_STATES"
+#  [ -z "${DO_LOG[record]}" ] || cat "$TESTCASE_REC_LOG"* >> "$TESTCASE_ALL_LOG" 2> /dev/null || true
 
   show_status "(inferring)"
 
+  # timeout --foreground $INFER_TIMEOUT \
+  #         $INFER -s "$TESTCASE_ALL_STATES" -max-expressiveness-level "$EXPRESSIVENESS_LEVEL"         \
+  #                -features-path $TESTCASE_FEATURES $STATS_ARG $EXTRA_NEG_STATES_ARG ${DO_LOG[infer]} \
+  #                $INFER_ARGS "$TESTCASE_PROCESSED" > "$TESTCASE_INVARIANT"
   timeout --foreground $INFER_TIMEOUT \
-          $INFER -s "$TESTCASE_ALL_STATES" -max-expressiveness-level "$EXPRESSIVENESS_LEVEL"         \
-                 -features-path $TESTCASE_FEATURES $STATS_ARG $EXTRA_NEG_STATES_ARG ${DO_LOG[infer]} \
+          $INFER -max-expressiveness-level "$EXPRESSIVENESS_LEVEL"         \
+                 ${DO_LOG[infer]} \
                  $INFER_ARGS "$TESTCASE_PROCESSED" > "$TESTCASE_INVARIANT"
   INFER_RESULT_CODE=$?
 fi

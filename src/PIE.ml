@@ -56,9 +56,9 @@ let synthFeature ?(consts = []) ~(job : Job.t) ~(config : Synthesizer.Config.t)
   let open Synthesizer in
   let result = solve ~config {
     constants = consts ;
-    arg_names = job.farg_names ;
+    arg_names = job.arg_names ;
     inputs = (let all_inputs = conflict_group.pos @ conflict_group.neg in
-      List.mapi job.farg_names
+      List.mapi job.arg_names
                 ~f:(fun i _ -> Array.of_list List.(map all_inputs ~f:(fun l -> nth_exn l i))));
     outputs = Array.of_list ((List.map conflict_group.pos ~f:(fun _ -> Value.Bool true))
                             @ (List.map conflict_group.neg ~f:(fun _ -> Value.Bool false)))
@@ -80,7 +80,7 @@ let resolveAConflict ?(config = Config.default) ?(consts = []) ~(job : Job.t)
   in Log.debug (lazy ("Invoking synthesizer with "
                       ^ (config._Synthesizer.logic.name) ^ " logic."
                       ^ (Log.indented_sep 0) ^ "Conflict group ("
-                      ^ (List.to_string_map2 job.farg_names job.farg_types ~sep:" , "
+                      ^ (List.to_string_map2 job.arg_names job.arg_types ~sep:" , "
                            ~f:(fun n t -> n ^ " :" ^ (Type.to_string t))) ^ "):" ^ (Log.indented_sep 2)
           ^ "POS (" ^ (Int.to_string (List.length conflict_group.pos)) ^ "):" ^ (Log.indented_sep 4)
                       ^ (List.to_string_map conflict_group.pos ~sep:(Log.indented_sep 4)

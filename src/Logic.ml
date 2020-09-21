@@ -3,7 +3,8 @@ open Core_kernel
 type t = {
   name : string ;
   components_per_level : Expr.component list array ;
-  sample_set_size_multiplier : int
+  sample_set_size_multiplier : int ;
+  z3_name : string
 }
 
 (* TODO: Think about better strategies for combining grammar levels across multiple theories.
@@ -21,28 +22,33 @@ let all_supported =
                 [{
                    name = "LIA" ;
                    components_per_level = BooleanComponents.levels ++ IntegerComponents.linear_levels ;
-                   sample_set_size_multiplier = 1
+                   sample_set_size_multiplier = 1 ;
+                   z3_name = "LIA"
                  } ; {
                    name = "NIA" ;
                    components_per_level = BooleanComponents.levels ++ IntegerComponents.non_linear_levels ;
-                   sample_set_size_multiplier = 8
+                   sample_set_size_multiplier = 8 ;
+                   z3_name = "NIA"
                  } ; {
                    name = "ALIA" ;
                    (* FIXME: Determine levels of ArrayComponents for hybrid enumeration *)
                    components_per_level = ArrayComponents.levels ++ BooleanComponents.levels ++ IntegerComponents.linear_levels ;
-                   sample_set_size_multiplier = 1
+                   sample_set_size_multiplier = 1 ;
+                   z3_name = "ALL"
                  } ; {
                    name = "ANIA" ;
                    (* FIXME: Determine levels of ArrayComponents for hybrid enumeration *)
                    components_per_level = ArrayComponents.levels ++ BooleanComponents.levels ++ IntegerComponents.non_linear_levels ;
-                   sample_set_size_multiplier = 8
+                   sample_set_size_multiplier = 8 ;
+                   z3_name = "ALL"
                  } ; {
                    name = "ALL" ;
                    (* FIXME: The verification side for lists, especially with transformed components,
                              doesn't work as of now -- we need to emit valid SMTLIB expressions for them *)
                    components_per_level = ArrayComponents.levels ++ BooleanComponents.levels
                                        ++ IntegerComponents.non_linear_levels ++ ListComponents.levels ;
-                   sample_set_size_multiplier = 8
+                   sample_set_size_multiplier = 8 ;
+                   z3_name = "ALL"
                 }]
     ; table
 

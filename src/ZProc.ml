@@ -137,16 +137,18 @@ let z3_result_to_model (result : string list) : model option =
           ; raise e
 
 let get_sat_model ?(eval_term = "true") ?(db = []) (z3 : t)
-                          : model option =
+                  : model option =
   z3_result_to_model (run_queries z3 (query_for_model ~eval_term ()) ~db)
 
 let implication_counter_example ?(eval_term = "true") ?(db = []) (z3 : t)
-                                (a : string) (b : string) : model option =
+                                (a : string) (b : string)
+                                : model option =
   get_sat_model z3 ~eval_term
-                        ~db:(("(assert (not (=> " ^ a ^ " " ^ b ^")))") :: db)
+                        ~db:(("(assert (not (=> " ^ a ^ " " ^ b ^ ")))") :: db)
 
 let equivalence_counter_example ?(eval_term = "true") ?(db = []) (z3 : t)
-                                (a : string) (b : string) : model option =
+                                (a : string) (b : string)
+                                : model option =
   get_sat_model z3 ~eval_term
     ~db:(("(assert (not (and (=> " ^ a ^ " " ^ b ^ ") (=> " ^ b ^ " " ^ a ^ "))))") :: db)
 
@@ -189,7 +191,12 @@ let model_to_constraint ?(negate=false) ?(ignore_primed=false) (model : model) :
       |> String.concat ~sep:" ")
  ^ (if negate then "))" else ")")
 
-let collect_models ?(eval_term = "true") ?(db = []) ?(n = 1) ?(init = None) ?(run = fun _ -> ()) (z3 : t)
+let collect_models ?(eval_term = "true")
+                   ?(db = [])
+                   ?(init = None) 
+                   ?(n = 1)
+                   ?(run = fun _ -> ())
+                   (z3 : t)
                    : model list =
   let query = query_for_model ~eval_term ()
    in create_scope z3

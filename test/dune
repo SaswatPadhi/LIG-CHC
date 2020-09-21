@@ -1,8 +1,0 @@
-(executable
-    (name Runner)
-    (libraries alcotest base LoopInvGen))
-
-(alias
-    (name runtest)
-    (deps Runner.exe)
-    (action (run %{deps})))

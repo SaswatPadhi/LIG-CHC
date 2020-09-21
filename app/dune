@@ -1,3 +1,0 @@
-(executable
-    (name App)
-    (libraries LoopInvGen base))
