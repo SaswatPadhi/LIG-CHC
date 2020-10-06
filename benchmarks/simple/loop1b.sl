@@ -1,3 +1,5 @@
+(set-logic CHC_ALL)
+
 (set-info :source )
 
 (set-option :produce-models true)

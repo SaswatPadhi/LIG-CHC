@@ -25,7 +25,7 @@ let unsafe_set_hex_char (v : t) (i : int) : char -> unit =
              | '1' -> helper false false false true
              | '2' -> helper false false true false
              | '3' -> helper false false true true
-             | '4' -> helper false false false false
+             | '4' -> helper false true false false
              | '5' -> helper false true false true
              | '6' -> helper false true true false
              | '7' -> helper false true true true

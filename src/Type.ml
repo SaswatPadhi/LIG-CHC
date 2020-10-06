@@ -51,40 +51,59 @@ module Unification = struct
   * See: https://eli.thegreenplace.net/2018/unification#efficiency
   *)
 
-  let rec substitute_with_exn (env : (int * t) list) = function
+type target = TYPE_ of int
+            | SIZE_ of int
+
+  let rec substitute_with_exn (env : (target * t) list) = function
     | ARRAY (k_type,v_type)
       -> ARRAY ((substitute_with_exn env k_type), (substitute_with_exn env v_type))
-    | LIST el_type      -> LIST (substitute_with_exn env el_type)
-    | TVAR name -> begin
-        match List.find ~f:(fun (id,_) -> Int.equal id name) env with
+    | BITVEC size_ -> begin
+        match List.find env ~f:(fun (id,_) -> match id with SIZE_ e_size_ -> Int.equal e_size_ size_
+                                                          | _ -> false) with
         | Some (_,value) -> value
-        | _ -> raise (Unification_Exn ("Could not find a binding for " ^ (Int.to_string name)))
+        | _ -> raise (Unification_Exn ("Could not find a binding for " ^ (to_string (BITVEC size_))))
+      end
+    | LIST el_type      -> LIST (substitute_with_exn env el_type)
+    | TVAR type_ -> begin
+        match List.find env ~f:(fun (id,_) -> match id with TYPE_ e_type_ -> Int.equal e_type_ type_
+                                                          | _ -> false) with
+        | Some (_,value) -> value
+        | _ -> raise (Unification_Exn ("Could not find a binding for " ^ (to_string (TVAR type_))))
       end
     | t -> t
 
-  let substitute (env : (int * t) list) (t : t) : t option =
+  let substitute (env : (target * t) list) (t : t) : t option =
     try Some (substitute_with_exn env t) with _ -> None
 
   let rec resolve_var ?(env = []) = function
-    | lhs, TVAR rhs -> if Int.equal lhs rhs
-                       then raise (Unification_Exn "Circular dependency!")
-                       else begin
-                         match List.find env ~f:(fun (e,_) -> Int.equal e rhs) with
-                         | None -> (lhs, TVAR rhs)
-                         | Some (_, (TVAR x)) -> resolve_var ~env (lhs, (TVAR x))
-                         | Some (_, rhs) -> (lhs, rhs)
-                       end
+    | TYPE_ lhs, TVAR rhs
+      -> if Int.equal lhs rhs
+         then raise (Unification_Exn "Circular dependency!")
+         else begin match List.find env ~f:(fun (e,_) -> match e with TYPE_ e -> Int.equal e rhs
+                                                                    | _ -> false) with
+                | None -> (TYPE_ lhs, TVAR rhs)
+                | Some (_, (TVAR x)) -> resolve_var ~env (TYPE_ lhs, (TVAR x))
+                | Some (_, rhs) -> (TYPE_ lhs, rhs)
+              end
     | pair -> pair
 
-  let rec of_var ?(env = []) (var : int) (rhs : t) =
-    match List.Assoc.find env ~equal:Int.equal var with
+  let rec of_var ?(env = []) (var : target) (rhs : t) =
+    match List.Assoc.find env var ~equal:(fun t_var t_env
+                                          -> match t_var, t_env with
+                                             | (TYPE_ i1), (TYPE_ i2)
+                                             | (SIZE_ i1), (SIZE_ i2) -> Int.equal i1 i2
+                                             | _ -> false) with
     | None -> begin
         match rhs with
         | TVAR var_rhs -> begin
-            match List.Assoc.find env ~equal:Int.equal var_rhs with
+            match List.Assoc.find env (TYPE_ var_rhs) ~equal:(fun _ -> function TYPE_ i_var_ -> Int.equal var_rhs i_var_
+                                                                              | _ -> false) with
             | None -> List.fold ((var,rhs) :: env) ~init:[]
                                 ~f:(fun acc elem -> (resolve_var elem ~env:(((var,rhs) :: env)) :: acc))
-            | Some value -> of_type ~env (TVAR var) value
+            | Some value -> begin match var with
+                              | TYPE_ var -> of_type ~env (TVAR var) value
+                              | _ -> raise (Unification_Exn ("A SIZE_ target is bound to TVAR!"))
+                            end
           end
         | _ -> List.fold ((var,rhs) :: env) ~init:[]
                          ~f:(fun acc elem -> (resolve_var elem ~env:(((var,rhs)::env)) :: acc))
@@ -97,22 +116,22 @@ module Unification = struct
           in (of_type lhs_value rhs_value ~env)
     | BITVEC lhs_width, BITVEC rhs_width
       -> begin match lhs_width, rhs_width with
-           | _ when Int.(lhs_width < 0) -> of_var ~env lhs_width rhs
-           | _ when Int.(rhs_width < 0) -> of_var ~env rhs_width lhs
+           | _ when Int.(lhs_width < 0) -> of_var ~env (SIZE_ lhs_width) rhs
+           | _ when Int.(rhs_width < 0) -> of_var ~env (SIZE_ rhs_width) lhs
            | _ -> env
          end
     | LIST lhs_type, LIST rhs_type
       -> of_type lhs_type rhs_type ~env
-    | TVAR x , _ -> of_var ~env x rhs
-    | _ , TVAR y -> of_var ~env y lhs
+    | TVAR x , _ -> of_var ~env (TYPE_ x) rhs
+    | _ , TVAR y -> of_var ~env (TYPE_ y) lhs
     | lhs , rhs -> if equal lhs rhs then env
                    else raise (Unification_Exn "Circular dependency!")
 
-  let rec of_types_exn ?(env = []) (lhs : t list) (rhs : t list) : (int * t) list =
+  let rec of_types_exn ?(env = []) (lhs : t list) (rhs : t list) : (target * t) list =
     match lhs , rhs with
     | (x :: tx, y :: ty) -> of_types_exn ~env:(of_type ~env x y) tx ty
     | _ -> env
 
-  let of_types ?(env = []) (t1 : t list) (t2 : t list) : (int * t) list option =
+  let of_types ?(env = []) (t1 : t list) (t2 : t list) : (target * t) list option =
       try Some (of_types_exn t1 t2) with _ -> None
 end
