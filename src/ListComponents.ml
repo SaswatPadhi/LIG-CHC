@@ -6,7 +6,7 @@ let all_qf = [
   {
     name = "length";
     codomain = Type.INT;
-    domain = Type.[LIST (TVAR "_")];
+    domain = Type.[LIST (TVAR 0)];
     is_argument_valid = (function _ -> true);
     evaluate = Value.(fun [@warning "-8"] [List (_,l)] -> Int (List.length l));
     to_string = (fun [@warning "-8"] [a] -> "(len " ^ a ^ ")");
@@ -14,8 +14,8 @@ let all_qf = [
   } ;
   {
     name = "hd";
-    codomain = Type.TVAR "T1";
-    domain = Type.[LIST (TVAR "T1")];
+    codomain = Type.TVAR 1;
+    domain = Type.[LIST (TVAR 1)];
     is_argument_valid = (function _ -> true);
     evaluate = Value.(fun [@warning "-8"] [List (_,l)] -> List.hd_exn l);
     to_string = (fun [@warning "-8"] [a] -> "(hd " ^ a ^ ")");
@@ -23,8 +23,8 @@ let all_qf = [
   } ;
   {
     name = "tl";
-    codomain = Type.(LIST (TVAR "T1"));
-    domain = Type.[LIST (TVAR "T1")];
+    codomain = Type.(LIST (TVAR 1));
+    domain = Type.[LIST (TVAR 1)];
     is_argument_valid = (function _ -> true);
     evaluate = Value.(fun [@warning "-8"] [List (t,l)] -> List (t, (List.tl_exn l)));
     to_string = (fun [@warning "-8"] [a] -> "(tl " ^ a ^ ")");

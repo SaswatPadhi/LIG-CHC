@@ -101,6 +101,12 @@ let z3_sexp_to_value (sexp : Sexp.t) : Value.t =
   match sexp with
   | _ -> Value.of_sexp sexp
 
+let evaluate (z3 : t) (term : string) : Value.t =
+  Value.of_string (
+    List.hd_exn (
+      run_queries ~scoped:false z3 [ "(eval " ^ term ^ " :completion true)" ]
+  ))
+
 let reduced_exps (varexps : Sexp.t list) =
   let symbol_table = String.Table.create () in
   let reduced_varexps = (
@@ -136,15 +142,17 @@ let z3_result_to_model (result : string list) : model option =
                             ^ "\n\n" ^ (Exn.to_string e)))
           ; raise e
 
-let get_sat_model ?(eval_term = "true") ?(db = []) (z3 : t)
+let check_sat ?(scoped = true) ?(db = []) (z3 : t) : bool =
+  String.equal (List.hd_exn (run_queries z3 ~scoped ~db [ "(check-sat)" ])) "sat"
+
+let get_sat_model ?(scoped = true) ?(eval_term = "true") ?(db = []) (z3 : t)
                   : model option =
-  z3_result_to_model (run_queries z3 (query_for_model ~eval_term ()) ~db)
+  z3_result_to_model (run_queries z3 ~scoped ~db (query_for_model ~eval_term ()))
 
 let implication_counter_example ?(eval_term = "true") ?(db = []) (z3 : t)
                                 (a : string) (b : string)
                                 : model option =
-  get_sat_model z3 ~eval_term
-                        ~db:(("(assert (not (=> " ^ a ^ " " ^ b ^ ")))") :: db)
+  get_sat_model z3 ~eval_term ~db:(("(assert (not (=> " ^ a ^ " " ^ b ^ ")))") :: db)
 
 let equivalence_counter_example ?(eval_term = "true") ?(db = []) (z3 : t)
                                 (a : string) (b : string)

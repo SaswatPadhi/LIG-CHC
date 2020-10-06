@@ -151,9 +151,11 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
   let typed_components t_type =
     let equal_f cod = Type.(match cod , t_type with
                             | ARRAY _ , ARRAY _ -> true
+                            | BITVEC _, BITVEC _ -> true
                             | LIST _ , LIST _ -> true
                             | TVAR _, _ -> true
-                            | cod, t_type -> equal cod t_type)
+                            | cod, t_type -> equal cod t_type
+                            )
      in Array.(append
           (create ~len:1 [])
           (mapi (init (Base.Int.min config.max_expressiveness_level (length config.logic.components_per_level))
@@ -164,37 +166,47 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
                                     else subtract ~from:comps (config.logic.components_per_level.(level - 1))))))
    in
 
-  let int_components = typed_components Type.INT in
   let bool_components = typed_components Type.BOOL in
   let char_components = typed_components Type.CHAR in
+  let int_components = typed_components Type.INT in
   let string_components = typed_components Type.STRING in
-  let poly_list_components = typed_components Type.(LIST (TVAR "_")) in
-  let poly_array_components = typed_components Type.(ARRAY (TVAR "_", TVAR "_")) in
+
+  let array_poly_components = typed_components Type.(ARRAY (TVAR 0, TVAR 0)) in
+  let bitvec_poly_components = typed_components Type.(BITVEC 0) in
+  let list_poly_components = typed_components Type.(LIST (TVAR 0)) in
 
   let empty_candidates () =
     Array.(init ((length config.logic.components_per_level) + 1)
                 ~f:(fun _ -> init config.cost_limit ~f:(fun _ -> DList.create ())))
    in
 
-  let int_candidates = empty_candidates () in
+  let array_candidates = empty_candidates () in
+  let bitvec_candidates = empty_candidates () in
   let bool_candidates = empty_candidates () in
   let char_candidates = empty_candidates () in
-  let string_candidates = empty_candidates () in
+  let int_candidates = empty_candidates () in
   let list_candidates = empty_candidates () in
-  let array_candidates = empty_candidates () in
+  let string_candidates = empty_candidates () in
 
   let typed_candidates ?(no_tvar = false) = function
-    | Type.INT     -> int_candidates
-    | Type.BOOL    -> bool_candidates
-    | Type.CHAR    -> char_candidates
-    | Type.STRING  -> string_candidates
-    | Type.LIST _  -> list_candidates
-    | Type.ARRAY _ -> array_candidates
+    | Type.ARRAY _  -> array_candidates
+    | Type.BITVEC _ -> bitvec_candidates
+    | Type.BOOL     -> bool_candidates
+    | Type.CHAR     -> char_candidates
+    | Type.INT      -> int_candidates
+    | Type.LIST _   -> list_candidates
+    | Type.STRING   -> string_candidates
     | Type.TVAR _ when not no_tvar
       -> raise (Internal_Exn "No candidates for TVAR")
-    | Type.TVAR _ -> let (@) = Array.append
-                      in int_candidates @ bool_candidates @ char_candidates
-                       @ string_candidates @ list_candidates @ array_candidates
+    | Type.TVAR _
+      -> let (@) = Array.append
+          in array_candidates
+           @ bitvec_candidates
+           @ bool_candidates
+           @ char_candidates
+           @ int_candidates
+           @ list_candidates
+           @ string_candidates
   in
 
   let seen_outputs = ref (Set.empty (module Output)) in
@@ -251,17 +263,18 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
     let applier (args : Expr.synthesized list) =
       stats.enumerated <- stats.enumerated + 1;
       begin
-        Log.debug (lazy ( "Attempting to unify " ^ component.name ^ " : [" ^ (List.to_string_map ~sep:"," ~f:Type.to_string component.domain)
+      (*Log.debug (lazy ( "Attempting to unify " ^ component.name ^ " : [" ^ (List.to_string_map ~sep:"," ~f:Type.to_string component.domain)
                         ^ "] -> " ^ (Type.to_string component.codomain)));
         Log.debug (lazy ("with [" ^ (List.to_string_map args ~sep:" , "
                                                         ~f:(fun a -> "(" ^ (Expr.to_string (Array.of_list task.arg_names) a.expr)
-                                                                   ^ " : " ^ (Type.to_string (Value.typeof a.outputs.(0))) ^ ")")) ^ "]"));
+                                                                   ^ " : " ^ (Type.to_string (Value.typeof a.outputs.(0))) ^ ")")) ^ "]")); *)
         match Expr.unify_component component (List.map args ~f:(fun a -> Value.typeof a.outputs.(0))) with
         | None -> Log.debug (lazy (" > Unification failure!"))
         | Some unified_component -> begin
             let cod = Type.(match unified_component.codomain with
-                            | ARRAY _ -> ARRAY (TVAR "_" , TVAR "_")
-                            | LIST _ -> LIST (TVAR "_")
+                            | ARRAY _ -> ARRAY (TVAR 0 , TVAR 0)
+                            | BITVEC _ -> BITVEC 0
+                            | LIST _ -> LIST (TVAR 0)
                             | cod -> cod)
              in if not (Type.equal cod cand_type) then
                   Log.debug (lazy ("  > The candidate type " ^ (Type.to_string cand_type) ^
@@ -306,18 +319,22 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
          ; seen_level_cost := (Set.add !seen_level_cost (level, cost))
          ; List.iter (List.range 1 ~stop:`inclusive level)
              ~f:(fun l -> List.iter2_exn
-                            Type.[ (BOOL, bool_candidates)
-                                 ; (INT, int_candidates)
+                            Type.[ (ARRAY (TVAR 0, TVAR 0), array_candidates)
+                                 ; (BITVEC 0, bitvec_candidates)
+                                 ; (BOOL, bool_candidates)
                                  ; (CHAR, char_candidates)
+                                 ; (INT, int_candidates)
+                                 ; (LIST (TVAR 0), list_candidates)
                                  ; (STRING, string_candidates)
-                                 ; (LIST (TVAR "_"), list_candidates)
-                                 ; (ARRAY (TVAR "_", TVAR "_"), array_candidates) ]
-                            [ bool_components.(l)
-                            ; int_components.(l)
+                                 ]
+                            [ array_poly_components.(l)
+                            ; bitvec_poly_components.(l)
+                            ; bool_components.(l)
                             ; char_components.(l)
+                            ; int_components.(l)
+                            ; list_poly_components.(l)
                             ; string_components.(l)
-                            ; poly_list_components.(l)
-                            ; poly_array_components.(l) ]
+                            ]
                             ~f:(fun (cand_type, cands) comps
                                 -> List.iter comps ~f:(expand_component l level cost cands cand_type))))
 

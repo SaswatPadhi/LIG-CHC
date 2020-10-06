@@ -55,12 +55,10 @@ let command =
                               ; max_conflict_group_size = logic.sample_set_size_multiplier
                                                         * config._PIE.max_conflict_group_size }
                      }
-         in let job = Job.create ...
-         in let candidates = Array.fold sygus.uninterpreted_functions ~init:[]
-                                        ~f:(fun acc info -> { job  ; info ; solution = "true" }
-                                                         :: acc)
-         in let interpretations = Solver.solve ~config ~zpath:z3_path sygus
-                                               (List.rev candidates)
+         in let candidates = Array.map sygus.uninterpreted_functions
+                                       ~f:(fun func -> { job = (Job.create ~args:func.args ())
+                                                       ; func ; solution = "true" })
+         in let interpretations = Solver.solve ~config ~zpath:z3_path sygus candidates
          in Out_channel.output_string
               Stdio.stdout
               (List.to_string_map interpretations ~sep:"\n" ~f:SyGuS.func_definition)

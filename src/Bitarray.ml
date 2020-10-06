@@ -1,93 +1,123 @@
-(*
- * Bitarray implementation from JaneStreet
- * (https://raw.githubusercontent.com/janestreet/core_extended/4a1f08a72b6ab3846148a31b889904994ff77807/src/bitarray.ml)
- *
- * See:
- *  - https://discuss.ocaml.org/t/ann-v0-12-release-of-jane-street-packages/3499/7
- *  - https://github.com/janestreet/core_extended/issues/22
- *)
-
 open Core
+open Exceptions
 
-(* a single 63 bit chunk of the array, bounds checking is left to the main module.
-   We can only use 62 bits, because of the sign bit *)
-module Int63_chunk : sig
-  type t
+open Utils
 
-  val empty : t
-  val get : t -> int -> bool
-  val set : t -> int -> bool -> t
-end = struct
-  open Int63
+include Bitv
+include Core.Comparable.Make (Bitv)
 
-  type t = Int63.t
+let signed_compare (v1 : t) (v2 : t) : int =
+  let l1 = (length v1) - 1 and l2 = (length v2) - 1
+   in if (unsafe_get v1 l1) && (not (unsafe_get v2 l2)) then -1
+      else if (not (unsafe_get v1 l1)) && (unsafe_get v2 l2) then 1
+      else compare v1 v2
 
-  let empty = zero
+let to_string (v : t) : string =
+  "#b" ^ (M.to_string v)
 
-  let get t i = bit_and t (shift_left one i) > zero
+let unsafe_set_hex_char (v : t) (i : int) : char -> unit =
+  let open Bitv in
+  let helper b0 b1 b2 b3 = unsafe_set v (i + 3) b0
+                         ; unsafe_set v (i + 2) b1
+                         ; unsafe_set v (i + 1) b2
+                         ; unsafe_set v i b3
+   in function '0' -> helper false false false false
+             | '1' -> helper false false false true
+             | '2' -> helper false false true false
+             | '3' -> helper false false true true
+             | '4' -> helper false false false false
+             | '5' -> helper false true false true
+             | '6' -> helper false true true false
+             | '7' -> helper false true true true
+             | '8' -> helper true false false false
+             | '9' -> helper true false false true
+             | 'a' | 'A' -> helper true false true false
+             | 'b' | 'B' -> helper true false true true
+             | 'c' | 'C' -> helper true true false false
+             | 'd' | 'D' -> helper true true false true
+             | 'e' | 'E' -> helper true true true false
+             | 'f' | 'F' -> helper true true true true
+             | _ -> raise Caml.Exit
 
-  let set t i v =
-    if v then bit_or t (shift_left one i)
-    else bit_and t (bit_xor minus_one (shift_left one i))
-end
+let of_hex_string (s : string) : t =
+  let n = String.length s in
+  let v = create (4 * n) false
+   in String.iteri s ~f:(fun i -> unsafe_set_hex_char v (4 * (n - 1 - i)))
+    ; v
 
-type t = {
-  data: Int63_chunk.t Array.t;
-  length: int
-}
+let of_bin_string (s : string) : t =
+  M.of_string s
 
-(* We can't use the sign bit, so we only get to use 62 bits *)
-let bits_per_bucket = 62
+let of_string (s : string) : t =
+  try
+    of_bin_string (String.chop_prefix_exn ~prefix:"#b" s)
+  with _ -> try
+    of_hex_string (String.chop_prefix_exn ~prefix:"#x" s)
+  with _ -> try
+    begin match [@warning "-8"] Sexp.(force_parse s) with
+      | Sexp.(List [ Atom "_" ; Atom const ; Atom width ])
+        -> let two_big_int = Bigint.of_int 2
+           and big_int_const = ref (Bigint.of_string (String.chop_prefix_exn ~prefix:"bv" const))
+           and int_width = Int.of_string width
+            in let v = create int_width false
+               and i = ref (0)
+                in while Bigint.(!big_int_const > zero)
+                      do (if Int.(!i >= int_width)
+                          then raise (Parse_Exn ("Binary constant " ^ const ^
+                                                 " is too large for width " ^ width)))
+                       ; (if Bigint.((!big_int_const % two_big_int) = one)
+                          then unsafe_set v !i true)
+                       ; big_int_const := Bigint.(!big_int_const asr 1)
+                       ; i := !i + 1
+                    done
+                 ; v
+    end
+  with Parse_Exn _ as p -> raise p
+     | _ -> raise (Parse_Exn ("Binary constant in unknown format: " ^ s))
 
-let create sz =
-  if sz < 0 || sz > (Array.max_length * bits_per_bucket) then
-    invalid_argf "invalid size" ();
-  { data = Array.create ~len:(1 + (sz / bits_per_bucket)) Int63_chunk.empty;
-    length = sz }
-;;
+let add (v1 : t) (v2 : t) (bits : int) : t =
+  let sum = create bits false in
+  let carry = ref false 
+   in for i = 0 to bits - 1 do
+        match (unsafe_get v1 i), (unsafe_get v2 i) with
+        | true, true
+          -> unsafe_set sum i !carry
+           ; carry := true
+        | false, true | true, false
+          -> unsafe_set sum i (not !carry)
+        | false, false
+          -> unsafe_set sum i !carry
+           ; carry := false
+      done
+    ; sum
 
-let bucket i = i / bits_per_bucket
-let index i = i mod bits_per_bucket
-let bounds_check t i =
-  if i < 0 || i >= t.length then
-    invalid_argf "Bitarray: out of bounds" ();
-;;
+let unsafe_same_len_bvadd ~(bits : int) (v1 : t) (v2 : t) : t =
+  let res = create bits false in
+  let carry = ref false 
+   in for i = 0 to bits - 1 do
+        match (unsafe_get v1 i), (unsafe_get v2 i) with
+        | true, true
+          -> unsafe_set res i !carry
+           ; carry := true
+        | false, true | true, false
+          -> unsafe_set res i (not !carry)
+        | false, false
+          -> unsafe_set res i !carry
+           ; carry := false
+      done
+    ; res
 
-let get t i =
-  bounds_check t i;
-  Int63_chunk.get t.data.(bucket i) (index i)
-;;
+let unsafe_same_len_bvsub ~(bits : int) (v1 : t) (v2 : t) : t =
+  let bvadd = unsafe_same_len_bvadd ~bits in
+  let one = create bits false
+   in unsafe_set one 0 true
+    ; bvadd v1 (bvadd (bw_not v2) one)
 
-let set t i v =
-  bounds_check t i;
-  let bucket = bucket i in
-  t.data.(bucket) <- Int63_chunk.set t.data.(bucket) (index i) v
-;;
-
-let clear t =
-  Array.fill t.data ~pos:0 ~len:(Array.length t.data) Int63_chunk.empty
-;;
-
-let fold =
-  let rec loop t n ~init ~f =
-    if n < t.length then
-      loop t (n + 1) ~init:(f init (get t n)) ~f
-    else
-      init
-  in
-  fun t ~init ~f -> loop t 0 ~init ~f
-;;
-
-let iter t ~f = fold t ~init:() ~f:(fun _ v -> f v)
-
-let sexp_of_t t =
-  Array.sexp_of_t Bool.sexp_of_t
-    (Array.init t.length ~f:(fun i -> get t i))
-;;
-
-let t_of_sexp sexp =
-  let a = Array.t_of_sexp Bool.t_of_sexp sexp in
-  let t = create (Array.length a) in
-  Array.iteri a ~f:(fun i v -> set t i v);
-  t
-;;
+let unsafe_same_len_bvmul ~(bits : int) (v1 : t) (v2 : t) : t =
+  let bvadd = unsafe_same_len_bvadd ~bits in
+  let res = ref (create bits false)
+   in for i = 0 to bits - 1 do
+        if unsafe_get v1 i
+        then res := (bvadd !res (shiftl v2 i))
+      done
+    ; !res

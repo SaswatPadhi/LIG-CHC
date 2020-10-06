@@ -20,36 +20,51 @@ let all_supported =
    let table = String.Table.create () ~size:8
    in List.iter ~f:(fun component -> String.Table.set table ~key:component.name ~data:component)
                 [{
-                   name = "LIA" ;
-                   components_per_level = BooleanComponents.levels ++ IntegerComponents.linear_levels ;
-                   sample_set_size_multiplier = 1 ;
-                   z3_name = "LIA"
-                 } ; {
-                   name = "NIA" ;
-                   components_per_level = BooleanComponents.levels ++ IntegerComponents.non_linear_levels ;
-                   sample_set_size_multiplier = 8 ;
-                   z3_name = "NIA"
-                 } ; {
                    name = "ALIA" ;
                    (* FIXME: Determine levels of ArrayComponents for hybrid enumeration *)
-                   components_per_level = ArrayComponents.levels ++ BooleanComponents.levels ++ IntegerComponents.linear_levels ;
+                   components_per_level = ArrayComponents.levels
+                                       ++ BooleanComponents.levels
+                                       ++ IntegerComponents.linear_levels ;
                    sample_set_size_multiplier = 1 ;
-                   z3_name = "ALL"
-                 } ; {
-                   name = "ANIA" ;
-                   (* FIXME: Determine levels of ArrayComponents for hybrid enumeration *)
-                   components_per_level = ArrayComponents.levels ++ BooleanComponents.levels ++ IntegerComponents.non_linear_levels ;
-                   sample_set_size_multiplier = 8 ;
                    z3_name = "ALL"
                  } ; {
                    name = "ALL" ;
                    (* FIXME: The verification side for lists, especially with transformed components,
                              doesn't work as of now -- we need to emit valid SMTLIB expressions for them *)
-                   components_per_level = ArrayComponents.levels ++ BooleanComponents.levels
-                                       ++ IntegerComponents.non_linear_levels ++ ListComponents.levels ;
+                   components_per_level = ArrayComponents.levels
+                                       ++ BooleanComponents.levels
+                                       ++ IntegerComponents.non_linear_levels
+                                       ++ BitVecComponents.levels
+                                       ++ ListComponents.levels ;
                    sample_set_size_multiplier = 8 ;
                    z3_name = "ALL"
-                }]
+                } ; {
+                   name = "ANIA" ;
+                   (* FIXME: Determine levels of ArrayComponents for hybrid enumeration *)
+                   components_per_level = ArrayComponents.levels
+                                       ++ BooleanComponents.levels
+                                       ++ IntegerComponents.non_linear_levels ;
+                   sample_set_size_multiplier = 8 ;
+                   z3_name = "ALL"
+                 } ; {
+                   name = "BV" ;
+                   components_per_level = BooleanComponents.levels
+                                       ++ BitVecComponents.levels ;
+                   sample_set_size_multiplier = 1 ;
+                   z3_name = "BV"
+                 } ; {
+                   name = "LIA" ;
+                   components_per_level = BooleanComponents.levels
+                                       ++ IntegerComponents.linear_levels ;
+                   sample_set_size_multiplier = 1 ;
+                   z3_name = "LIA"
+                 } ; {
+                   name = "NIA" ;
+                   components_per_level = BooleanComponents.levels
+                                       ++ IntegerComponents.non_linear_levels ;
+                   sample_set_size_multiplier = 8 ;
+                   z3_name = "NIA"
+                 }]
     ; table
 
 let of_string name = String.Table.find_exn all_supported name

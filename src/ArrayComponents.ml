@@ -9,8 +9,8 @@ let normalize = List.dedup_and_stable_sort ~which_to_keep:`First
 let all = [
   {
     name = "select";
-    codomain = Type.TVAR "T2";
-    domain = Type.[ARRAY (TVAR "T1", TVAR "T2"); TVAR "T1"];
+    codomain = Type.TVAR 2;
+    domain = Type.[ARRAY (TVAR 1, TVAR 2); TVAR 1];
     is_argument_valid = (function
                          | [FCall (comp, [a ; k1 ; _]) ; k2]
                            when String.equal comp.name "store"
@@ -26,8 +26,8 @@ let all = [
   } ;
   {
     name = "store";
-    codomain = Type.(ARRAY (TVAR "T1", TVAR "T2"));
-    domain = Type.[ARRAY (TVAR "T1", TVAR "T2"); TVAR "T1"; TVAR "T2"];
+    codomain = Type.(ARRAY (TVAR 1, TVAR 2));
+    domain = Type.[ARRAY (TVAR 1, TVAR 2); TVAR 1; TVAR 2];
     is_argument_valid = (function
                          | _ -> true);
     evaluate = Value.(fun [@warning "-8"]
@@ -39,7 +39,7 @@ let all = [
   {
     name = "equal";
     codomain = Type.BOOL;
-    domain = Type.[ARRAY (TVAR "T1", TVAR "T2"); ARRAY (TVAR "T1", TVAR "T2")];
+    domain = Type.[ARRAY (TVAR 1, TVAR 2); ARRAY (TVAR 1, TVAR 2)];
     is_argument_valid = (function
                          | [x ; y] -> (x =/= y)
                          | _ -> true);

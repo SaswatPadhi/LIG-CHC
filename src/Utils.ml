@@ -3,12 +3,48 @@ open Core
 module Array = struct
   include Array
 
+  let to_rev_list_map (a : 'a array) ~(f : 'a -> 'b) : 'b list =
+    Array.fold a ~init:[] ~f:(fun acc e -> (f e) :: acc)
+
   let to_string_map ~(sep : string) (l : 'a array) ~(f : 'a -> string) : string =
     String.concat_array ~sep (map l ~f)
 
   let to_string_map2 ~(sep : string) (l1 : 'a array) (l2 : 'b array)
                      ~(f : 'a -> 'b -> string) : string =
     String.concat_array ~sep (map2_exn l1 l2 ~f)
+end
+
+module Bitv = struct
+  include Bitv
+
+  let fold = fold_left
+
+  let foldi = foldi_left
+
+  let compare (v1 : t) (v2 : t) : int =
+    let rec helper (i1 : int) (i2 : int) : int =
+      if i1 >= 0 && i2 >= 0
+      then let b1 = unsafe_get v1 i1 and b2 = unsafe_get v2 i2
+            in if Bool.equal b1 b2
+               then helper (i1 - 1) (i2 - 1)
+               else (if b1 then 1 else -1)
+      else if i1 < 0
+      then begin
+             if i2 < 0 then 0
+             else (if unsafe_get v2 i2 then -1 else helper i1 (i2 - 1))
+           end
+      else (if unsafe_get v1 i1 then 1 else helper (i1 - 1) i2)
+     in helper ((length v1) - 1) ((length v2) - 1)
+
+  let sexp_of_t (v : t) : Sexp.t =
+    Array.sexp_of_t Bool.sexp_of_t
+                    (Array.init (length v) ~f:(unsafe_get v))
+
+  let t_of_sexp (sexp : Sexp.t) : t =
+    let array = Array.t_of_sexp Bool.t_of_sexp sexp in
+    let v = create (Array.length array) false
+     in Array.iteri array ~f:(unsafe_set v)
+      ; v
 end
 
 module Hashtbl = struct
@@ -52,47 +88,19 @@ module Sexp = struct
     | _ -> Atom str
 end
 
+module String = struct
+  include String
+
+  let iteri s ~f =
+    ignore
+      (fold s ~init:0 ~f:(fun i x -> f i x ; i + 1) : int)
+end
+
 let normalize_spaces = Str.(global_replace (regexp "[ \n\r\x0c\t][ \n\r\x0c\t]+") " ")
 
 let get_in_channel = function
   | "-"      -> Stdio.In_channel.stdin
   | filename -> Stdio.In_channel.create filename
-
-let replace bindings expr =
-  if List.is_empty bindings then expr else
-  let open Sexp in
-  let table = ref (String.Map.empty)
-   in List.iter bindings
-                ~f:(function [@warning "-8"]
-                    | List [ (Atom key) ; data ]
-                      -> table := String.Map.add_exn !table ~key ~data)
-    ; let rec helper = function
-        | List l -> List (List.map l ~f:helper)
-        | Atom atom -> match String.Map.find !table atom with
-                       | None      -> Atom atom
-                       | Some data -> data
-       in helper expr
-
-let rec remove_lets : Sexp.t -> Sexp.t = function
-  | Atom _ as atom -> atom
-  | List [ (Atom "let") ; List bindings ; body ]
-    -> replace bindings (remove_lets body)
-  | List l -> List (List.map l ~f:remove_lets)
-
-let rec binarize_boolean_ops : Sexp.t -> Sexp.t = function
-  | Atom _ as atom -> atom
-  | List [ (Atom "and") ; arg ] | List [ (Atom "or") ; arg ] -> arg
-  | List ((Atom "and") :: args)
-    -> List ( (Atom "and") :: (List.concat_map args ~f:(fun a -> match binarize_boolean_ops a with
-                                                                 | List ((Atom "and") :: inner_args)
-                                                                   -> inner_args
-                                                                 | a -> [a])) )
-  | List ((Atom "or") :: args)
-    -> List ( (Atom "or") :: (List.concat_map args ~f:(fun a -> match binarize_boolean_ops a with
-                                                                | List ((Atom "or") :: inner_args)
-                                                                  -> inner_args
-                                                                | a -> [a])) )
-  | List l -> List (List.map l ~f:binarize_boolean_ops)
 
 let make_user_features feature_strings vars : (string * string) list =
   let feature_strings =

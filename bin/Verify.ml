@@ -9,12 +9,13 @@ let check_solution ~zpath ~(sygus : SyGuS.t) in_chan : result =
   let open Sexplib.Sexp in
   let sexps = input_rev_sexps in_chan
    in ZProc.process ~zpath (fun z3->
-        ZProc.create_scope z3 ~db:(List.map sexps ~f:Sexp.to_string_hum) ;
+        ignore (ZProc.run_queries z3 [] ~scoped:false ~db:(
+          ("(set-logic " ^ (Logic.of_string sygus.logic).z3_name ^ ")") ::
+          (List.map ~f:SyGuS.func_definition sygus.defined_functions) @
+          (List.map sexps ~f:Sexp.to_string_hum)
+        )) ;
         List.iter (sygus.queries @ sygus.constraints)
-                  ~f:(fun q -> match Solver.check_chc z3 q with
-                              | None -> ()
-                              | Some model -> raise Caml.Exit) ;
-        ZProc.close_scope z3 ;
+                  ~f:(fun q -> if not (Solver.check_chc z3 q) then raise Caml.Exit) ;
         PASS
     )
 

@@ -3,13 +3,14 @@ open Base
 open Exceptions
 
 module T = struct
-  type t = Int of int
+  type t = Array of Type.t * Type.t * (t * t) list * t
+           (* FIXME: Use HashTable instead of List *)
+         | BitVec of Bitarray.t
          | Bool of bool
          | Char of char
-         | String of string
+         | Int of int
          | List of Type.t * t list
-         | Array of Type.t * Type.t * (t * t) list * t
-           (* FIXME: Use HashTable instead of List *)
+         | String of string
          [@@deriving compare,sexp]
 end
 
@@ -17,30 +18,34 @@ include T
 include Comparable.Make (T)
 
 let rec typeof : t -> Type.t = function
-  | Int _         -> Type.INT
-  | Bool _        -> Type.BOOL
-  | Char _        -> Type.CHAR
-  | String _      -> Type.STRING
-  | List (typ, _) -> Type.LIST typ
   | Array (key_type, value_type, _, _)
     -> Type.ARRAY (key_type,value_type)
+  | BitVec v      -> Type.BITVEC (Bitarray.length v)
+  | Bool _        -> Type.BOOL
+  | Char _        -> Type.CHAR
+  | Int _         -> Type.INT
+  | List (typ, _) -> Type.LIST typ
+  | String _      -> Type.STRING
 
 let rec to_string : t -> string = function
-  | Int i    -> Int.to_string i
-  | Bool b   -> Bool.to_string b
-  | Char c   -> "\'" ^ (Char.to_string c) ^ "\'"
-  | String s -> "\"" ^ s ^ "\""
-  | List _   -> raise (Internal_Exn "List type (de/)serialization not implemented!")
   | Array (key_type, val_type, value, default_v)
     -> let default_string = "((as const (Array " ^ (Type.to_string key_type) ^ " " ^ (Type.to_string val_type) ^ ")) " ^ (to_string default_v) ^ ")"
         in List.fold_left ~init:default_string value
                           ~f:(fun arr -> function (k,v) -> "(store " ^ arr ^ " " ^ (to_string k) ^ " " ^ (to_string v) ^ ")")
+  | BitVec v -> (Bitarray.to_string v)
+  | Bool b   -> Bool.to_string b
+  | Char c   -> "\'" ^ (Char.to_string c) ^ "\'"
+  | Int i    -> Int.to_string i
+  | List _   -> raise (Internal_Exn "List type (de/)serialization not implemented!")
+  | String s -> "\"" ^ s ^ "\""
 
 let of_atomic_string (s : string) : t =
   try
     Int (Int.of_string s)
   with Failure _ -> try
     Bool (Bool.of_string s)
+  with Invalid_argument _ -> try
+    BitVec (Bitarray.of_string s)
   with Invalid_argument _ -> try
     Char (Char.of_string (String.(chop_suffix_exn ~suffix:"\'"
                                     (chop_prefix_exn ~prefix:"\'" s))))
@@ -86,7 +91,7 @@ and of_sexp (sexp : Sexp.t) : t =
                                       (let key_type, val_type, arr,def_val = (parse_array [] sexp) in
                                                 Array ((key_type) , (val_type) ,arr, def_val))
       | List(Atom "let"::_) ->
-                            (let key_type, val_type, arr,def_val = (parse_array [] (Utils.remove_lets sexp)) in
+                            (let key_type, val_type, arr,def_val = (parse_array [] (Transform.remove_lets sexp)) in
                                       Array ((key_type) , (val_type) ,arr, def_val))
       | _ -> raise (Internal_Exn ("Unable to deserialize value: "
                                 ^ (to_string_hum sexp)))
