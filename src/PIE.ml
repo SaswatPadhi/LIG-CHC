@@ -19,7 +19,7 @@ module Config = struct
     max_conflict_group_size : int ;
   }
 
-  let base_max_conflict_group_size = 128
+  let base_max_conflict_group_size = 64
 
   let default : t = {
     _BFL = BFL.Config.default ;

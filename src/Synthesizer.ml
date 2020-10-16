@@ -11,14 +11,16 @@ module Config = struct
     cost_attribute : cost_attr ;
     logic : Logic.t ;
     max_expressiveness_level : int ;
+    min_satisfaction : float ;
     order : int -> int -> float ;
   }
 
   let default : t = {
-    cost_limit = 32 ;
+    cost_limit = 128 ;
     cost_attribute = Size ;
     logic = Logic.of_string "LIA" ;
     max_expressiveness_level = 1024 ;
+    min_satisfaction = 0.975 ;
     order = (fun g_cost e_cost -> (Int.to_float e_cost) *. (Float.log (Int.to_float g_cost))) ;
   }
 end
@@ -238,11 +240,13 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
   let f_cost = match config.cost_attribute with Height -> Expr.height | Size -> Expr.size in
   let f_divide = match config.cost_attribute with Height -> divide_height | Size -> divide_size in
 
+  let min_satisfaction = Float.(to_int (round_up (config.min_satisfaction *. of_int(Array.length task.outputs)))) in
   let check (candidate : Expr.synthesized) =
     (* Log.debug (lazy ("  > Now checking (@ cost " ^ (Int.to_string (f_cost candidate.expr)) ^ "): "
                        ^ (Expr.to_string (Array.of_list task.arg_names) candidate.expr))) ; *)
-    if Array.equal Value.equal task.outputs candidate.outputs
-    then raise (Success candidate.expr)
+    let satisfaction = Array.fold2_exn task.outputs candidate.outputs ~init:0
+                                       ~f:(fun acc x y -> if Value.equal x y then acc + 1 else acc)
+     in if (satisfaction >= min_satisfaction) then raise (Success candidate.expr)
   in
 
   let task_codomain = Value.typeof task.outputs.(1)

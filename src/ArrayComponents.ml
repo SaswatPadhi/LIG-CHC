@@ -3,8 +3,9 @@ open Core
 open Expr
 open Utils
 
-let normalize = List.dedup_and_stable_sort ~which_to_keep:`First
-                                           ~compare:(fun (k1,_) (k2,_) -> Value.compare k1 k2)
+let shrink =
+  List.dedup_and_stable_sort ~which_to_keep:`First
+                             ~compare:(fun (k1,_) (k2,_) -> Value.compare k1 k2)
 
 let all = [
   {
@@ -51,8 +52,8 @@ let all = [
                            (Type.equal a_val_type b_val_type) &&
                            (Value.equal a_default_val b_default_val) &&
                            (List.equal (Tuple.T2.equal ~eq1:Value.equal ~eq2:Value.equal)
-                                       (normalize a_elems)
-                                       (normalize b_elems))));
+                                       (shrink a_elems)
+                                       (shrink b_elems))));
     to_string = (fun [@warning "-8"] [a ; b] -> "(= " ^ a ^ " " ^ b ^ ")");
     global_constraints = (fun _ -> [])
   }
