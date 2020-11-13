@@ -12,6 +12,7 @@ type chc = {
   args : var list ;
   body : string ;
   head : (int * (string list)) list ;
+  is_ind : bool ;
   name : string ;
   tail : (int * (string list)) list ;
 }
@@ -24,11 +25,20 @@ type func = {
   expressible : bool ;
 }
 
+type uifunc = {
+  args : var list ;
+  name : string ;
+  (* TODO: keep track of multiple potential bounds for a single counter variable *)
+  counters : (int * string * string) list ; (* variable index * lower bound * upper bound *)
+  return : Type.t ;
+  expressible : bool ;
+}
+
 type t = {
   logic : string ;
   constants : Value.t list ;
   defined_functions : func list ;
-  uninterpreted_functions : func array ;
+  uninterpreted_functions : uifunc array ;
   constraints : chc list ;
   queries : chc list ;
 }
@@ -61,7 +71,7 @@ let parse_define_fun : Sexp.t list -> func * Value.t list = function
 let var_declaration ((n, t) : var) : string =
   "(declare-const " ^ n ^ " " ^ (Type.to_string t) ^ ")"
 
-let func_declaration (f : func) : string =
+let func_declaration (f : uifunc) : string =
   "(declare-fun " ^ f.name ^ " ("
   ^ (List.to_string_map f.args ~sep:" " ~f:(fun (_, t) -> Type.to_string t))
   ^ ") " ^ (Type.to_string f.return) ^ ")"
@@ -82,12 +92,22 @@ let chc_func_definition (c : chc) : string =
        c.args ~sep:" " ~f:(fun (v, t) -> "(" ^ v ^ " " ^ (Type.to_string t) ^ ")"))
   ^ ") Bool " ^ c.body ^ ")"
 
+let rec contains (elem : int) (lst : (int * (string list)) list) : bool = 
+  match lst with
+  |  h::t -> elem = (fst h) || (contains elem t)
+  |  []   -> false
+
+let rec contains_list  (lst1 : (int * (string list)) list) (lst2 : (int * (string list)) list) : bool = 
+match lst1 with
+  |  h::t -> (contains (fst h) lst2) || (contains_list t lst2)
+  |  []   -> false
+
 let parse_sexps (sexps : Sexp.t list) : t =
   let chc_idx = ref 0 in
   let logic : string ref = ref "" in
   let consts : Value.t list ref = ref [] in
   let defined_funcs : func list ref = ref [] in
-  let uninterpreted_funcs : func list ref = ref [] in
+  let uninterpreted_funcs : uifunc list ref = ref [] in
   let constraints : chc list ref = ref [] in
   let queries : chc list ref = ref []
    in List.iter sexps
@@ -108,7 +128,7 @@ let parse_sexps (sexps : Sexp.t list) : t =
               | List [ (Atom "synth-fun") ; (Atom name) ; (List vars) ; _ ]
                 -> uninterpreted_funcs := { args = List.map ~f:parse_variable_declaration vars ;
                                             name ;
-                                            body = "" ;
+                                            counters = [] ;
                                             return = Type.BOOL ;
                                             expressible = true }
                                        :: !uninterpreted_funcs
@@ -116,7 +136,7 @@ let parse_sexps (sexps : Sexp.t list) : t =
                 -> Log.error (lazy ("LoopInvGen currently does not allow custom grammars."))
                  ; uninterpreted_funcs := { args = List.map ~f:parse_variable_declaration vars ;
                                             name ;
-                                            body = "" ;
+                                            counters = [] ;
                                             return = Type.BOOL ;
                                             expressible = true }
                                        :: !uninterpreted_funcs
@@ -156,6 +176,7 @@ let parse_sexps (sexps : Sexp.t list) : t =
                                   -> queries := { args = List.map ~f:parse_variable_declaration vars
                                                 ; name = "_query_index__" ^ (Int.to_string !chc_idx) ^ "_"
                                                 ; head = []
+                                                ; is_ind = false 
                                                 ; tail = tail_data
                                                 ; body = "(not " ^ Sexp.to_string_hum tail ^ ")"
                                                 } :: !queries
@@ -164,9 +185,11 @@ let parse_sexps (sexps : Sexp.t list) : t =
                                                        | Some (i,_) -> [ (i,[]) ]
                                                        | _ -> []
                                                      end
+                                      in let is_ind = contains_list head_data tail_data
                                       in constraints := { args = List.map ~f:parse_variable_declaration vars
                                                         ; name = "_chc_index__" ^ (Int.to_string !chc_idx) ^ "_"
                                                         ; head = head_data
+                                                        ; is_ind = is_ind 
                                                         ; tail = tail_data
                                                         ; body = "(not (=> " ^ (Sexp.to_string_hum tail) ^ " " ^ a ^ ")"
                                                         } :: !constraints
@@ -175,9 +198,11 @@ let parse_sexps (sexps : Sexp.t list) : t =
                                                        | Some (i,_) -> [ (i,(List.map ops ~f:Sexp.to_string_hum)) ]
                                                        | _ -> []
                                                      end
+                                      in let is_ind = contains_list head_data tail_data
                                       in constraints := { args = List.map ~f:parse_variable_declaration vars
                                                         ; name = "_chc_index__" ^ (Int.to_string !chc_idx) ^ "_"
-                                                        ; head = head_data
+                                                        ; head = head_data                                                
+                                                        ; is_ind = is_ind 
                                                         ; tail = tail_data
                                                         ; body = "(=> " ^ (Sexp.to_string_hum tail) ^ " " ^ (Sexp.to_string_hum head) ^ ")"
                                                         } :: !constraints
@@ -186,7 +211,8 @@ let parse_sexps (sexps : Sexp.t list) : t =
                             ; chc_idx := !chc_idx + 1
                      | _ -> raise (Parse_Exn ("Constraint not in CHC form: " ^ (Sexp.to_string_hum chc_body)))
                    end
-              | sexp -> raise (Parse_Exn ("Unknown command: " ^ (Sexp.to_string_hum sexp))))
+              | sexp -> raise (Parse_Exn ("Unknown command: " ^ (Sexp.to_string_hum sexp)))
+        )
     ; consts := List.dedup_and_sort ~compare:Poly.compare !consts
     ; Log.debug (lazy ("Detected Constants: " ^ (List.to_string_map ~sep:", " ~f:Value.to_string !consts)))
     ; if String.equal !logic ""
@@ -203,7 +229,7 @@ let parse ?(bv_to_int : int = -1) (chan : Stdio.In_channel.t) : t =
   let sexps = Sexplib.Sexp.input_sexps chan in
   let sexps = if bv_to_int < 0 then sexps
               else List.map sexps ~f:(Transform.bv_to_int ~width:bv_to_int)
-   in parse_sexps (List.map ~f:Transform.flatten sexps)
+   in parse_sexps (List.map ~f:Transform.flatten sexps) 
 
 let write_to (filename : string) (sygus : t) : unit =
   let out_chan = Stdio.Out_channel.create filename
