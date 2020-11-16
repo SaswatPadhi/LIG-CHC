@@ -29,6 +29,7 @@ type candidate = {
   func : SyGuS.func ;
   solution : string ;
   job : Job.t ;
+  counters : (int * string * string) list;
 }
 
 type chc_counterex = {

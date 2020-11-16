@@ -4,6 +4,7 @@ open Exceptions
 
 module T = struct
   type t = Array of Type.t * Type.t * (t * t) list * t
+          (* PMN: position x value x list of (pos, int) x default value for the remaining elements, since arrays are unbounded in smt*)
            (* FIXME: Use HashTable instead of List *)
          | BitVec of Bitarray.t
          | Bool of bool

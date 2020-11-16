@@ -76,10 +76,12 @@ let unify_component (comp : component) (arg_types : Type.t list) : component opt
                 | Some codomain -> let domain = List.map comp.domain ~f:(substitute_with_exn env)
                                     in Some { comp with codomain ; domain }
 
+(* applies new component *)
 let apply (comp : component) (args : synthesized list) : synthesized option =
   if (not (comp.is_argument_valid (List.map args ~f:(fun arg -> arg.expr)))) then None
   else try
     let select idx = List.map args ~f:(fun arg -> arg.outputs.(idx))
+    (* Todo: check args for ghost variables, if so, don't evaluate but return a lambda function like (fun ghost_a -> eval subexp)  *)
      in Some { expr = FCall (comp, List.map ~f:(fun arg -> arg.expr) args)
              ; outputs = Array.mapi (List.hd_exn args).outputs
                                     ~f:(fun i _ -> comp.evaluate (select i)) }

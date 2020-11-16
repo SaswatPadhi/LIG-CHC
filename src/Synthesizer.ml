@@ -189,12 +189,14 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
   let int_candidates = empty_candidates () in
   let list_candidates = empty_candidates () in
   let string_candidates = empty_candidates () in
+  let ghost_candidates = empty_candidates () in 
 
   let typed_candidates ?(no_tvar = false) = function
     | Type.ARRAY _  -> array_candidates
     | Type.BITVEC _ -> bitvec_candidates
     | Type.BOOL     -> bool_candidates
     | Type.CHAR     -> char_candidates
+    | Type.GHOST _    -> ghost_candidates
     | Type.INT      -> int_candidates
     | Type.LIST _   -> list_candidates
     | Type.STRING   -> string_candidates
@@ -232,6 +234,7 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
   in List.(iter (rev constants) ~f:add_constant_candidate)
   ;
 
+(* add ghost variable holders for each array *)
   List.iteri task.inputs ~f:(fun i input ->
     ignore (add_candidate (typed_candidates (Value.typeof input.(1))) 0 1
                           { expr = Expr.Var i ; outputs = input }))
