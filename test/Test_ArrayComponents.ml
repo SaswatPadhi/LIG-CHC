@@ -2,11 +2,11 @@ open Base
 
 open LoopInvGen
 
-let equal_eval = (List.find_exn ArrayComponents.all
+let equal_eval = (List.find_exn ArrayComponents.equality
                                 ~f:(fun comp -> String.equal comp.name "equal")).evaluate
-let select_eval = (List.find_exn ArrayComponents.all
+let select_eval = (List.find_exn ArrayComponents.reads
                                  ~f:(fun comp -> String.equal comp.name "select")).evaluate
-let store_eval = (List.find_exn ArrayComponents.all
+let store_eval = (List.find_exn ArrayComponents.writes
                                 ~f:(fun comp -> String.equal comp.name "store")).evaluate
 
 let select () =

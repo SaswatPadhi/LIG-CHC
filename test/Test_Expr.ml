@@ -7,7 +7,7 @@ open Expr
 let find_component list name = List.find_exn list ~f:(fun c -> String.equal c.name name)
 
 let unify_success () =
-  let select_comp = find_component ArrayComponents.all "select" in
+  let select_comp = find_component ArrayComponents.reads "select" in
   let arg_types = Type.[ ARRAY (STRING,INT) ; STRING ] in
   let res = Type.(match unify_component select_comp arg_types with
                   | None -> false
@@ -17,7 +17,7 @@ let unify_success () =
    in Alcotest.(check bool) "identical" true res
 
 let unify_failure () =
-  let select_comp = find_component ArrayComponents.all "select" in
+  let select_comp = find_component ArrayComponents.reads "select" in
   let arg_types = Type.[ ARRAY (STRING,INT) ; INT ] in
   let res = unify_component select_comp arg_types
    in Alcotest.(check bool) "identical" true (Option.is_none res)
