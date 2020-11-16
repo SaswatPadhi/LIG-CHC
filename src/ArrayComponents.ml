@@ -7,36 +7,7 @@ let shrink =
   List.dedup_and_stable_sort ~which_to_keep:`First
                              ~compare:(fun (k1,_) (k2,_) -> Value.compare k1 k2)
 
-let all = [
-  {
-    name = "select";
-    codomain = Type.TVAR 2;
-    domain = Type.[ARRAY (TVAR 1, TVAR 2); TVAR 1];
-    is_argument_valid = (function
-                         | [FCall (comp, [a ; k1 ; _]) ; k2]
-                           when String.equal comp.name "store"
-                           -> k1 =/= k2
-                         | _ -> true);
-    evaluate = Value.(fun [@warning "-8"]
-                      [Array (_, _, elems, default_val) ; key]
-                      -> match List.Assoc.find elems ~equal:Value.equal key with
-                         | None -> default_val
-                         | Some value -> value);
-    to_string = (fun [@warning "-8"] [a ; b] -> "(select " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
-  } ;
-  {
-    name = "store";
-    codomain = Type.(ARRAY (TVAR 1, TVAR 2));
-    domain = Type.[ARRAY (TVAR 1, TVAR 2); TVAR 1; TVAR 2];
-    is_argument_valid = (function
-                         | _ -> true);
-    evaluate = Value.(fun [@warning "-8"]
-                      [Array (key_type, val_type, elems, default_val) ; key ; value]
-                      -> Array (key_type, val_type, (key, value)::elems, default_val));
-    to_string = (fun [@warning "-8"] [a ; b ; c] -> "(store " ^ a ^ " " ^ b ^ " " ^ c ^ ")");
-    global_constraints = (fun _ -> [])
-  } ;
+let equality = [
   {
     name = "equal";
     codomain = Type.BOOL;
@@ -59,4 +30,39 @@ let all = [
   }
 ]
 
-let levels = [| all |]
+let reads = [
+  {
+    name = "select";
+    codomain = Type.TVAR 2;
+    domain = Type.[ARRAY (TVAR 1, TVAR 2); TVAR 1];
+    is_argument_valid = (function
+                         | [FCall (comp, [a ; k1 ; _]) ; k2]
+                           when String.equal comp.name "store"
+                           -> k1 =/= k2
+                         | _ -> true);
+    evaluate = Value.(fun [@warning "-8"]
+                      [Array (_, _, elems, default_val) ; key]
+                      -> match List.Assoc.find elems ~equal:Value.equal key with
+                         | None -> default_val
+                         | Some value -> value);
+    to_string = (fun [@warning "-8"] [a ; b] -> "(select " ^ a ^ " " ^ b ^ ")");
+    global_constraints = (fun _ -> [])
+  }
+]
+
+let writes = [
+  {
+    name = "store";
+    codomain = Type.(ARRAY (TVAR 1, TVAR 2));
+    domain = Type.[ARRAY (TVAR 1, TVAR 2); TVAR 1; TVAR 2];
+    is_argument_valid = (function
+                         | _ -> true);
+    evaluate = Value.(fun [@warning "-8"]
+                      [Array (key_type, val_type, elems, default_val) ; key ; value]
+                      -> Array (key_type, val_type, (key, value)::elems, default_val));
+    to_string = (fun [@warning "-8"] [a ; b ; c] -> "(store " ^ a ^ " " ^ b ^ " " ^ c ^ ")");
+    global_constraints = (fun _ -> [])
+  } ;
+]
+
+let levels = [| equality ; reads ; writes |]

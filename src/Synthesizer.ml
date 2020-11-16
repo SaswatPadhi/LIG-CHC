@@ -190,33 +190,35 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
   let list_candidates = empty_candidates () in
   let string_candidates = empty_candidates () in
 
-  let typed_candidates ?(no_tvar = false) = function
-    | Type.ARRAY _  -> array_candidates
-    | Type.BITVEC _ -> bitvec_candidates
-    | Type.BOOL     -> bool_candidates
-    | Type.CHAR     -> char_candidates
-    | Type.INT      -> int_candidates
-    | Type.LIST _   -> list_candidates
-    | Type.STRING   -> string_candidates
-    | Type.TVAR _ when not no_tvar
+  let typed_candidates ?(no_tvar = true) ~(level : int) ~(cost : int) = function
+    | Type.ARRAY _  -> array_candidates.(level).(cost)
+    | Type.BITVEC _ -> bitvec_candidates.(level).(cost)
+    | Type.BOOL     -> bool_candidates.(level).(cost)
+    | Type.CHAR     -> char_candidates.(level).(cost)
+    | Type.INT      -> int_candidates.(level).(cost)
+    | Type.LIST _   -> list_candidates.(level).(cost)
+    | Type.STRING   -> string_candidates.(level).(cost)
+    | Type.TVAR _ when no_tvar
       -> raise (Internal_Exn "No candidates for TVAR")
     | Type.TVAR _
-      -> let (@) = Array.append
-          in array_candidates
-           @ bitvec_candidates
-           @ bool_candidates
-           @ char_candidates
-           @ int_candidates
-           @ list_candidates
-           @ string_candidates
+      -> let open DList in
+         let result = DList.create ()
+          in transfer ~dst:result ~src:(copy array_candidates.(level).(cost))
+           ; transfer ~dst:result ~src:(copy bitvec_candidates.(level).(cost))
+           ; transfer ~dst:result ~src:(copy bool_candidates.(level).(cost))
+           ; transfer ~dst:result ~src:(copy char_candidates.(level).(cost))
+           ; transfer ~dst:result ~src:(copy int_candidates.(level).(cost))
+           ; transfer ~dst:result ~src:(copy list_candidates.(level).(cost))
+           ; transfer ~dst:result ~src:(copy string_candidates.(level).(cost))
+           ; result
   in
 
   let seen_outputs = ref (Set.empty (module Output)) in
-  let add_candidate candidates_set level cost (candidate : Expr.synthesized) =
+  let add_candidate candidates_set (candidate : Expr.synthesized) =
     let old_size = Set.length !seen_outputs
      in seen_outputs := Set.add !seen_outputs candidate.outputs
       ; if (Set.length !seen_outputs) = old_size then false
-        else (ignore (DList.insert_last candidates_set.(level).(cost) candidate) ; true)
+        else (ignore (DList.insert_last candidates_set candidate) ; true)
   in
 
   let constants = Value.(
@@ -228,12 +230,12 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
     let candidate : Expr.synthesized = {
       expr = Expr.Const value;
       outputs = Array.create ~len:(Array.length task.outputs) value;
-    } in ignore (add_candidate (typed_candidates (Value.typeof value)) 0 1 candidate)
+    } in ignore (add_candidate (typed_candidates (Value.typeof value) ~level:0 ~cost:1) candidate)
   in List.(iter (rev constants) ~f:add_constant_candidate)
   ;
 
   List.iteri task.inputs ~f:(fun i input ->
-    ignore (add_candidate (typed_candidates (Value.typeof input.(1))) 0 1
+    ignore (add_candidate (typed_candidates (Value.typeof input.(1)) ~level:0 ~cost:1)
                           { expr = Expr.Var i ; outputs = input }))
   ;
 
@@ -250,7 +252,7 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
   in
 
   let task_codomain = Value.typeof task.outputs.(1)
-   in DList.iter ~f:check (typed_candidates task_codomain).(0).(1)
+   in DList.iter ~f:check (typed_candidates task_codomain ~level:0 ~cost:1)
   ;
 
   let apply_component op_level expr_level cost arg_types applier =
@@ -258,7 +260,7 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
       match arg_types , locations with
       | typ :: arg_types , (lvl,loc) :: locations
         -> DList.iter ~f:(fun x -> apply_cells (x :: acc) arg_types locations)
-                      (typed_candidates ~no_tvar:true typ).(lvl).(loc)
+                      (typed_candidates ~no_tvar:false typ ~level:lvl ~cost:loc)
       | ([], []) -> applier (List.rev acc)
       | _ -> raise (Internal_Exn "Impossible case!")
     in f_divide (apply_cells [] arg_types) (List.length arg_types) op_level expr_level (cost - 1)
@@ -290,7 +292,7 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
                     -> let expr_cost = f_cost result.expr
                         in if expr_cost < config.cost_limit
                            then (if Type.equal task_codomain unified_component.codomain then check result)
-                         ; if not (add_candidate candidates expr_level expr_cost result)
+                         ; if not (add_candidate candidates.(expr_level).(expr_cost) result)
                            then stats.pruned <- stats.pruned + 1
                   end
             end
