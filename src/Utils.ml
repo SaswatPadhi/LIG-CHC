@@ -120,3 +120,14 @@ let make_user_features feature_strings vars : (string * string) list =
                            let fdef = "(define-fun " ^ fname ^ sign ^ fs ^ ")"
                             in (fdef, fname))
    end
+  
+  let forall_numbers_ref: int list ref = ref []
+
+  let rec get_fresh_var () : string = 
+    let random_var = Random.int 1000 in 
+    if (List.exists !forall_numbers_ref ~f:(fun (i:int) -> i = random_var))
+      then get_fresh_var ()
+    else 
+      let rdms = !forall_numbers_ref in 
+      forall_numbers_ref := rdms@[random_var];
+      "__FORALL_VAR_" ^ "_" ^ (string_of_int random_var)
