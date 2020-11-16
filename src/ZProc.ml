@@ -143,7 +143,11 @@ let z3_result_to_model (result : string list) : model option =
           ; raise e
 
 let check_sat ?(scoped = true) ?(db = []) (z3 : t) : bool =
-  String.equal (List.hd_exn (run_queries z3 ~scoped ~db [ "(check-sat)" ])) "sat"
+  match run_queries z3 ~scoped ~db [ "(check-sat)" ] with
+  | "sat" :: _ -> true
+  | "unknown" :: _ -> raise (Internal_Exn "Z3 couldn't check satisfiability")
+  | "unsat" :: _ -> false
+  | _ -> raise (Internal_Exn "Z3 encountered an error!")
 
 let get_sat_model ?(scoped = true) ?(eval_term = "true") ?(db = []) (z3 : t)
                   : model option =

@@ -14,9 +14,11 @@ let check_solution ~zpath ~(sygus : SyGuS.t) in_chan : result =
           (List.map ~f:SyGuS.func_definition sygus.defined_functions) @
           (List.map sexps ~f:Sexp.to_string_hum)
         )) ;
-        List.iter (sygus.queries @ sygus.constraints)
-                  ~f:(fun q -> if not (Solver.check_chc z3 q) then raise Caml.Exit) ;
-        PASS
+        try
+          List.iter (sygus.queries @ sygus.constraints)
+                    ~f:(fun q -> if not (Solver.check_chc z3 q) then raise Caml.Exit) ;
+          PASS
+        with _ -> FAIL
     )
 
 let string_of_result = function
