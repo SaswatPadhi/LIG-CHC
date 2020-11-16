@@ -44,3 +44,5 @@ config.h
 # - - -
 _*
 *.tgz
+*.DS_STORE
+.ocamlinit
