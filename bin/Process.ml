@@ -20,7 +20,7 @@ let command =
         Log.enable ~msg:"PROCESS" log_path ;
         let in_chan = Utils.get_in_channel sygus_path in
         let sygus = SyGuS.parse ~bv_to_int (in_chan)
-         in SyGuS.(write_to out_path sygus)
+         in SyGuS.(write_to out_path (SyGuS_Post.add_counter sygus))
           ; Stdio.In_channel.close in_chan
       end
     ]

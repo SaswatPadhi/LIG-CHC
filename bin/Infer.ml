@@ -56,8 +56,13 @@ let command =
                                                         * config._PIE.max_conflict_group_size }
                      }
          in let candidates = Array.map sygus.uninterpreted_functions
-                                       ~f:(fun func -> { job = (Job.create ~args:func.args ())
-                                                       ; func ; solution = "true" })
+                                       ~f:(fun uifunc -> { job = (Job.create ~args:uifunc.args ())
+                                                       ; func={ args = uifunc.args ;
+                                                          name = uifunc.name ;
+                                                          body = "true" ;
+                                                          return = uifunc.return ;
+                                                          expressible = uifunc.expressible ;
+                                                       } ; solution = "true"; counters = uifunc.counters })
          in let interpretations = Solver.solve ~config ~zpath:z3_path sygus candidates
          in Out_channel.output_string
               Stdio.stdout
