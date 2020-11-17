@@ -3,27 +3,41 @@ open Base
 open Exceptions
 
 module T = struct
-  type t = Array of Type.t * Type.t * (t * t) list * t
-          (* PMN: position x value x list of (pos, int) x default value for the remaining elements, since arrays are unbounded in smt*)
-           (* FIXME: Use HashTable instead of List *)
-         | BitVec of Bitarray.t
-         | Bool of bool
-         | Char of char
-         | Int of int
-         | List of Type.t * t list
-         | String of string
-         [@@deriving compare,sexp]
+  type t =
+    (* PMN: Array type: position x value x list of (pos, int) x default value for the remaining elements, since arrays are unbounded in smt*)
+    | Array of Type.t * Type.t * (t * t) list * t (* FIXME: Use HashTable instead of List *)
+    | BitVec of Bitarray.t
+    | Bool of bool
+    | Char of char
+    | Fun_ of Type.t * Type.t * ((t -> t) [@compare.ignore][@equal.ignore])
+    | Int of int
+    | List of Type.t * t list
+    | String of string
+    [@@deriving compare,equal,sexp]
 end
 
 include T
-include Comparable.Make (T)
 
-let rec typeof : t -> Type.t = function
+let unsafe_compare = compare
+let unsafe_equal = equal
+
+let compare (a : t) (b : t) : int =
+  match a , b with
+  | Fun_ _ , Fun_ _ -> raise (Internal_Exn "Attempted to compare two functions!")
+  | _ -> unsafe_compare a b
+
+let equal (a : t) (b : t) : bool =
+  match a , b with
+  | Fun_ _ , Fun_ _ -> raise (Internal_Exn "Attempted to compare two functions!")
+  | _ -> unsafe_equal a b
+  
+  let rec typeof : t -> Type.t = function
   | Array (key_type, value_type, _, _)
     -> Type.ARRAY (key_type,value_type)
   | BitVec v      -> Type.BITVEC (Bitarray.length v)
   | Bool _        -> Type.BOOL
   | Char _        -> Type.CHAR
+  | Fun_ _        -> raise (Internal_Exn "Internal Fun_ values should not be exposed")
   | Int _         -> Type.INT
   | List (typ, _) -> Type.LIST typ
   | String _      -> Type.STRING
@@ -36,6 +50,7 @@ let rec to_string : t -> string = function
   | BitVec v -> (Bitarray.to_string v)
   | Bool b   -> Bool.to_string b
   | Char c   -> "\'" ^ (Char.to_string c) ^ "\'"
+  | Fun_ _   -> raise (Internal_Exn "Internal Fun_ values should not be exposed")
   | Int i    -> Int.to_string i
   | List _   -> raise (Internal_Exn "List type (de/)serialization not implemented!")
   | String s -> "\"" ^ s ^ "\""

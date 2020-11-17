@@ -4,39 +4,33 @@ open Expr
 
 let all = [
   {
-    name = "not";
+    (MakeComponent.unary "not") with
     codomain = Type.BOOL;
     domain = [Type.BOOL];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                          | [FCall (comp, _)] when String.equal comp.name "not"
                            -> false
                          | [ e ] -> not (is_constant e)
                          | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Bool x] -> Bool (not x));
-    to_string = (fun [@warning "-8"] [a] -> "(not " ^ a ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Bool x] -> Bool (not x))
   } ;
   {
-    name = "and";
+    (MakeComponent.binary "and") with
     codomain = Type.BOOL;
     domain = Type.[BOOL; BOOL];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                          | [x ; y] -> (x =/= y) && (not (is_constant x || is_constant y))
                          | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Bool x ; Bool y] -> Bool (x && y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(and " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Bool x ; Bool y] -> Bool (x && y))
   } ;
   {
-    name = "or";
+    (MakeComponent.binary "or") with
     codomain = Type.BOOL;
     domain = Type.[BOOL; BOOL];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                          | [x ; y] -> (x =/= y) && (not (is_constant x || is_constant y))
                          | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Bool x ; Bool y] -> Bool (x || y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(or " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Bool x ; Bool y] -> Bool (x || y))
   }
 ]
 

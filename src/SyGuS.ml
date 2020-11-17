@@ -216,10 +216,10 @@ let parse_sexps (sexps : Sexp.t list) : t =
     ; consts := List.dedup_and_sort ~compare:Poly.compare !consts
     ; Log.debug (lazy ("Detected Constants: " ^ (List.to_string_map ~sep:", " ~f:Value.to_string !consts)))
     ; if String.equal !logic ""
-      then (logic := "LIA" ; Log.debug (lazy ("Using default logic: LIA")))
+      then (logic := "ALL" ; Log.debug (lazy ("Using default logic: ALL")))
     ; { constants = !consts
       ; logic = !logic
-      ; defined_functions = !defined_funcs
+      ; defined_functions = List.rev !defined_funcs
       ; uninterpreted_functions = Array.of_list !uninterpreted_funcs
       ; constraints = !constraints
       ; queries = !queries
