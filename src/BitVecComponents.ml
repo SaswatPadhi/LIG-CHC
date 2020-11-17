@@ -12,127 +12,109 @@ let is_one : Expr.t -> bool =
 
 let equality = [
   {
-    name = "bv-eq";
+    (MakeComponent.binary ~symbol:"=" "bv-eq") with
     codomain = Type.BOOL;
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                           | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                           | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
                       -> Bool (Int.equal (Bitarray.compare v1 v2) 0));
-    to_string = (fun [@warning "-8"] [v1;v2] -> "(= " ^ v1 ^ " " ^ v2 ^ ")");
-    global_constraints = (fun _ -> []);
   }
 ]
 
 let intervals = equality @ [
   {
-    name = "bvsge";
+    (MakeComponent.binary "bvsge") with
     codomain = Type.BOOL;
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                           | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                           | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
                       -> Bool (Int.is_non_negative (Bitarray.signed_compare v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvsge " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
   } ;
   {
-    name = "bvsle";
+    (MakeComponent.binary "bvsle") with
     codomain = Type.BOOL;
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                           | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                           | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> Bool (Int.is_non_positive (Bitarray.signed_compare v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvsle " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> Bool (Int.is_non_positive (Bitarray.signed_compare v1 v2)))
   } ;
   {
-    name = "bvsgt";
+    (MakeComponent.binary "bvsgt") with
     codomain = Type.BOOL;
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                           | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                           | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> Bool (Int.is_positive (Bitarray.signed_compare v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvsgt " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> Bool (Int.is_positive (Bitarray.signed_compare v1 v2)))
   } ;
   {
-    name = "bvslt";
+    (MakeComponent.binary "bvslt") with
     codomain = Type.BOOL;
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                           | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                           | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> Bool (Int.is_negative (Bitarray.signed_compare v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvslt " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> Bool (Int.is_negative (Bitarray.signed_compare v1 v2)))
   }
 ]
 
 let unsigned_intervals = intervals @ [
   {
-    name = "bvuge";
+    (MakeComponent.binary "bvuge") with
     codomain = Type.BOOL;
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                           | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                           | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> Bool (Int.is_non_negative (Bitarray.compare v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvuge " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> Bool (Int.is_non_negative (Bitarray.compare v1 v2)))
   } ;
   {
-    name = "bvule";
+    (MakeComponent.binary "bvule") with
     codomain = Type.BOOL;
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                           | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                           | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> Bool (Int.is_non_positive (Bitarray.compare v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvule " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> Bool (Int.is_non_positive (Bitarray.compare v1 v2)))
   } ;
   {
-    name = "bvugt";
+    (MakeComponent.binary "bvugt") with
     codomain = Type.BOOL;
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                           | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                           | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> Bool (Int.is_positive (Bitarray.compare v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvugt " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> Bool (Int.is_positive (Bitarray.compare v1 v2)))
   } ;
   {
-    name = "bvult";
+    (MakeComponent.binary "bvult") with
     codomain = Type.BOOL;
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                           | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                           | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> Bool (Int.is_negative (Bitarray.compare v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvult " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> Bool (Int.is_negative (Bitarray.compare v1 v2)))
   }
 ]
 
 let octagons = unsigned_intervals @ [
   {
-    name = "bvadd";
+    (MakeComponent.binary "bvadd") with
     codomain = Type.BITVEC (-1);
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = Value.(function
+    check_arg_ASTs = Value.(function
                                | [x ; FCall (comp, [_ ; y])]
                                  when String.equal comp.name "bvsub"
                                  -> x =/= y && (not (is_zero x))
@@ -142,15 +124,13 @@ let octagons = unsigned_intervals @ [
                                | [x ; y] -> (not (is_zero x)) && (not (is_zero y))
                                | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> BitVec (Bitarray.(unsafe_same_len_bvadd ~bits:(length v1) v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvadd " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> BitVec (Bitarray.(unsafe_same_len_bvadd ~bits:(length v1) v1 v2)))
   } ;
   {
-    name = "bvsub";
+    (MakeComponent.binary "bvsub") with
     codomain = Type.BITVEC (-1);
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = Value.(function
+    check_arg_ASTs = Value.(function
                                | [(FCall (comp, [x ; y])) ; z]
                                  when String.equal comp.name "bvadd"
                                  -> x =/= z && y =/= z && (not (is_zero z))
@@ -163,82 +143,70 @@ let octagons = unsigned_intervals @ [
                                | [x ; y] -> (x =/= y) && (not (is_zero x)) && (not (is_zero y))
                                | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> BitVec (Bitarray.(unsafe_same_len_bvsub ~bits:(length v1) v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvsub " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> BitVec (Bitarray.(unsafe_same_len_bvsub ~bits:(length v1) v1 v2)))
   }
 ]
 
 let bitwise = octagons @ [
   {
-    name = "bvnot";
+    (MakeComponent.unary "bvnot") with
     codomain = Type.BITVEC (-1);
     domain = Type.[BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                          | [FCall (comp, _)] when String.equal comp.name "bvnot"
                            -> false
                          | [ _ ] -> true
                          | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [BitVec v] -> BitVec (Bitarray.bw_not v));
-    to_string = (fun [@warning "-8"] [a] -> "(bvnot " ^ a ^ ")");
-    global_constraints = (fun _ -> []);
+    evaluate = Value.(fun [@warning "-8"] [BitVec v] -> BitVec (Bitarray.bw_not v))
   } ;
   {
-    name = "bvand";
+    (MakeComponent.binary "bvand") with
     codomain = Type.BITVEC (-1);
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                          | [x ; y] -> (x =/= y)
                          | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> BitVec (Bitarray.bw_and v1 v2));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvand " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> BitVec (Bitarray.bw_and v1 v2))
   } ;
   {
-    name = "bvor";
+    (MakeComponent.binary "bvor") with
     codomain = Type.BITVEC (-1);
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                          | [x ; y] -> (x =/= y)
                          | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> BitVec (Bitarray.bw_or v1 v2));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvor " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> BitVec (Bitarray.bw_or v1 v2))
   }
 ]
 
 let polyhedra = bitwise @ [
   {
-    name = "bvmul";
+    (MakeComponent.binary "bvmul") with
     codomain = Type.BITVEC (-1);
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                           | [x ; y]
                             -> (is_constant x || is_constant y)
                             && (not (is_zero x)) && (not (is_one x))
                             && (not (is_zero y)) && (not (is_one y))
                           | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> BitVec (Bitarray.(unsafe_same_len_bvmul ~bits:(length v1) v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvmul " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> []);
+                      -> BitVec (Bitarray.(unsafe_same_len_bvmul ~bits:(length v1) v1 v2)))
   }
 ]
 
 let polynomials = polyhedra @ [
   {
-    name = "bv-nonlin-mul";
+    (MakeComponent.binary ~symbol:"bvmul" "bv-nonlin-mul") with
     codomain = Type.BITVEC (-1);
     domain = Type.[BITVEC (-1); BITVEC (-1)];
-    is_argument_valid = Value.(function
+    check_arg_ASTs = Value.(function
                                | [x ; y] -> not (is_constant x || is_constant y)
                                | _ -> false);
     evaluate = Value.(fun [@warning "-8"] [BitVec v1 ; BitVec v2]
-                      -> BitVec (Bitarray.(unsafe_same_len_bvmul ~bits:(length v1) v1 v2)));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(bvmul " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+                      -> BitVec (Bitarray.(unsafe_same_len_bvmul ~bits:(length v1) v1 v2)))
   }
 ]
 

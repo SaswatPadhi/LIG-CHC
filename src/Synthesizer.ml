@@ -244,8 +244,8 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
 
   let min_satisfaction = Float.(to_int (round_up (config.min_satisfaction *. of_int(Array.length task.outputs)))) in
   let check (candidate : Expr.synthesized) =
-    Log.debug (lazy ("  > Now checking (@ cost " ^ (Int.to_string (f_cost candidate.expr)) ^ "): "
-                       ^ (Expr.to_string (Array.of_list task.arg_names) candidate.expr))) ;
+    (* Log.debug (lazy ("  > Now checking (@ cost " ^ (Int.to_string (f_cost candidate.expr)) ^ "): "
+                       ^ (Expr.to_string (Array.of_list task.arg_names) candidate.expr))) ; *)
     let satisfaction = Array.fold2_exn task.outputs candidate.outputs ~init:0
                                        ~f:(fun acc x y -> if Value.equal x y then acc + 1 else acc)
      in if (satisfaction >= min_satisfaction) then raise (Success candidate.expr)

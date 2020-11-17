@@ -9,13 +9,39 @@ type component = {
   domain : Type.t list ;
   to_string : string list -> string ;
   global_constraints : string list -> string list ;
-  is_argument_valid : t list -> bool ;
+  check_arg_ASTs : t list -> bool ;
   name : string ;
 } and t =
   | FCall of component * t list
   | Const of Value.t
   | Var of int
   [@@deriving sexp]
+
+module MakeComponent = struct
+  let base : component = {
+    name = "UNKNOWN" ;
+    domain = [] ;
+    codomain = Type.TVAR 0 ;
+    evaluate = (fun _ -> raise (Internal_Exn "NOT IMPLEMENTED!")) ;
+    to_string = (fun _ -> raise (Internal_Exn "NOT IMPLEMENTED!")) ;
+    global_constraints = (fun _ -> []);
+    check_arg_ASTs = (fun _ -> true) ;
+  }
+
+  let binary ?(symbol = "") (name : string) : component = {
+    base with
+    name ;
+    to_string = (fun [@warning "-8"] [a ; b]
+                 -> "(" ^ (if String.is_empty symbol then name else symbol) ^ " " ^ a ^ " " ^ b ^ ")") ;
+  }
+
+  let unary ?(symbol = "") (name : string) : component = {
+    base with
+    name ;
+    to_string = (fun [@warning "-8"] [ a ]
+                 -> "(" ^ (if String.is_empty symbol then name else symbol) ^ " " ^ a ^ ")") ;
+  }
+end
 
 let rec equal e1 e2 =
   match e1, e2 with
@@ -77,10 +103,11 @@ let unify_component (comp : component) (arg_types : Type.t list) : component opt
                                     in Some { comp with codomain ; domain }
 
 let apply (comp : component) (args : synthesized list) : synthesized option =
-  if (not (comp.is_argument_valid (List.map args ~f:(fun arg -> arg.expr)))) then None
+  if (not (comp.check_arg_ASTs (List.map args ~f:(fun arg -> arg.expr)))) then None
   else try
     let select idx = List.map args ~f:(fun arg -> arg.outputs.(idx))
      in Some { expr = FCall (comp, List.map ~f:(fun arg -> arg.expr) args)
              ; outputs = Array.mapi (List.hd_exn args).outputs
                                     ~f:(fun i _ -> comp.evaluate (select i)) }
-  with _ -> None
+  with Internal_Exn e -> raise (Internal_Exn e)
+     | _ -> None

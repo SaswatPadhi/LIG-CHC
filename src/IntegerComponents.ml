@@ -6,71 +6,61 @@ let pos_div x y = (x - (x % y)) / y
 
 let equality = [
   {
-    name = "int-eq";
+    (MakeComponent.binary ~symbol:"=" "int-eq") with
     codomain = Type.BOOL;
     domain = Type.[INT; INT];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                          | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                          | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Bool Int.(x = y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(= " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Bool Int.(x = y))
   }
 ]
 
 let intervals = equality @ [
    {
-    name = "int-geq";
+    (MakeComponent.binary ~symbol:">=" "int-geq") with
     codomain = Type.BOOL;
     domain = Type.[INT; INT];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                          | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                          | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Bool Int.(x >= y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(>= " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Bool Int.(x >= y))
   } ;
   {
-    name = "int-leq";
+    (MakeComponent.binary ~symbol:"<=" "int-leq") with
     codomain = Type.BOOL;
     domain = Type.[INT; INT];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                          | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                          | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Bool Int.(x <= y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(<= " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Bool Int.(x <= y))
   } ;
   {
-    name = "int-lt";
+    (MakeComponent.binary ~symbol:"<" "int-lt") with
     codomain = Type.BOOL;
     domain = Type.[INT; INT];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                          | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                          | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Bool Int.(x < y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(< " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Bool Int.(x < y))
   } ;
   {
-    name = "int-gt";
+    (MakeComponent.binary ~symbol:">" "int-gt") with
     codomain = Type.BOOL;
     domain = Type.[INT; INT];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                          | [x ; y] -> (x =/= y) && (not (is_constant x && is_constant y))
                          | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Bool Int.(x > y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(> " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Bool Int.(x > y))
   }
 ]
 
 let octagons = intervals @ [
   {
-    name = "int-add";
+    (MakeComponent.binary ~symbol:"+" "int-add") with
     codomain = Type.INT;
     domain = Type.[INT; INT];
-    is_argument_valid = Value.(function
+    check_arg_ASTs = Value.(function
                                | [x ; FCall (comp, [_ ; y])]
                                  when String.equal comp.name "int-sub"
                                  -> x =/= y && (x =/= Const (Int 0))
@@ -79,15 +69,13 @@ let octagons = intervals @ [
                                  -> x =/= y && (y =/= Const (Int 0))
                                | [x ; y] -> (x =/= Const (Int 0)) && (y =/= Const (Int 0))
                                | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Int (x + y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(+ " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Int (x + y))
   } ;
   {
-    name = "int-sub";
+    (MakeComponent.binary ~symbol:"-" "int-sub") with
     codomain = Type.INT;
     domain = Type.[INT; INT];
-    is_argument_valid = Value.(function
+    check_arg_ASTs = Value.(function
                                | [(FCall (comp, [x ; y])) ; z]
                                  when String.equal comp.name "int-add"
                                  -> x =/= z && y =/= z && (z =/= Const (Int 0))
@@ -100,49 +88,43 @@ let octagons = intervals @ [
                                | [x ; y] -> (x =/= y)
                                          && (x =/= Const (Int 0)) && (y =/= Const (Int 0))
                                | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Int (x - y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(- " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Int (x - y))
   }
 ]
 
 let polyhedra = octagons @ [
   {
-    name = "int-lin-mult";
+    (MakeComponent.binary ~symbol:"*" "int-lin-mult") with
     codomain = Type.INT;
     domain = Type.[INT; INT];
-    is_argument_valid = Value.(function
+    check_arg_ASTs = Value.(function
                                | [x ; y]
                                  -> (x =/= Const (Int 0)) && (x =/= Const (Int 1))
                                  && (y =/= Const (Int 0)) && (y =/= Const (Int 1))
                                  && (is_constant x || is_constant y)
                                | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Int (x * y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(* " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Int (x * y))
   }
 ]
 
 let polynomials = polyhedra @ [
   {
-    name = "int-nonlin-mult";
+    (MakeComponent.binary ~symbol:"*" "int-nonlin-mult") with
     codomain = Type.INT;
     domain = Type.[INT; INT];
-    is_argument_valid = Value.(function
+    check_arg_ASTs = Value.(function
                                | [x ; y] -> not (is_constant x || is_constant y)
                                | _ -> false);
-    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Int (x * y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(* " ^ a ^ " " ^ b ^ ")");
-    global_constraints = (fun _ -> [])
+    evaluate = Value.(fun [@warning "-8"] [Int x ; Int y] -> Int (x * y))
   }
 ]
 
 let peano = polynomials @ [
   {
-    name = "int-div";
+    (MakeComponent.binary ~symbol:"div" "int-div") with
     codomain = Type.INT;
     domain = Type.[INT; INT];
-    is_argument_valid = Value.(function
+    check_arg_ASTs = Value.(function
                                | [x ; y] -> x =/= y
                                          && (x =/= Const (Int 0)) && (x =/= Const (Int 1))
                                          && (y =/= Const (Int 0)) && (y =/= Const (Int 1))
@@ -150,14 +132,13 @@ let peano = polynomials @ [
     evaluate = Value.(function [@warning "-8"]
                       [Int x ; Int y] when Int.(y <> 0)
                       -> Int (pos_div x y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(div " ^ a ^ " " ^ b ^ ")");
     global_constraints = (fun [@warning "-8"] [_ ; b] -> ["(not (= 0 " ^ b ^ "))"]);
   } ;
   {
-    name = "int-mod";
+    (MakeComponent.binary ~symbol:"mod" "int-mod") with
     codomain = Type.INT;
     domain = Type.[INT; INT];
-    is_argument_valid = Value.(function
+    check_arg_ASTs = Value.(function
                                | [x ; y] -> x =/= y
                                          && (x =/= Const (Int 0)) && (x =/= Const (Int 1))
                                          && (y =/= Const (Int 0)) && (y =/= Const (Int 1))
@@ -165,7 +146,6 @@ let peano = polynomials @ [
     evaluate = Value.(function [@warning "-8"]
                       [Int x ; Int y] when Int.(y <> 0)
                       -> Int (x % y));
-    to_string = (fun [@warning "-8"] [a ; b] -> "(mod " ^ a ^ " " ^ b ^ ")");
     global_constraints = (fun [@warning "-8"] [_ ; b] -> ["(not (= 0 " ^ b ^ "))"]);
   }
 ]
