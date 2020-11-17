@@ -48,15 +48,13 @@ let all = all_qf @ [
 let map_transform_unary (component : component) : component =
   match component.domain with
   | [dom] -> let name = "map-" ^ component.name
-              in { name;
+              in { (MakeComponent.unary name) with
                    codomain = Type.LIST component.codomain;
                    domain = Type.[LIST dom];
                    check_arg_ASTs = (function _ -> true);
                    evaluate = Value.(fun [@warning "-8"] [ List (_,l) ]
                                      -> List ((Type.LIST component.codomain),
-                                              (List.map l ~f:(fun e -> component.evaluate [e]))));
-                   to_string = (fun [@warning "-8"] [a] -> "(" ^ name ^ " " ^ a ^ ")" );
-                   global_constraints = (fun _ -> [])
+                                              (List.map l ~f:(fun e -> component.evaluate [e]))))
                   }
   | l -> raise (Exceptions.Transformation_Exn (
                   "Cannot transform a " ^ (Int.to_string (List.length l)) ^ "-ary component " ^ component.name))
@@ -78,23 +76,21 @@ let map_transform_binary (component : component) : component list =
     -> let nameL = "map-fixL-" ^ component.name in
        let nameR = "map-fixR-" ^ component.name
         in [{
-              name = nameR;
+              (MakeComponent.binary nameR) with
               codomain = Type.LIST component.codomain;
               domain = Type.[LIST d1 ; d2];
               check_arg_ASTs = (function _ -> true);
               evaluate = Value.(fun [@warning "-8"] [List (_, x) ; y]
                                 -> List (component.codomain, (List.map x ~f:(fun e -> component.evaluate [e ; y]))));
-              to_string = (fun [@warning "-8"] [a ; b] -> "(" ^ nameR ^ " " ^ a ^ " " ^ b ^ ")");
               global_constraints = component.global_constraints
             } ;
             {
-              name = nameL;
+              (MakeComponent.binary nameL) with
               codomain = Type.LIST component.codomain;
               domain = Type.[d1 ; LIST d2];
               check_arg_ASTs = (function _ -> true);
               evaluate = Value.(fun [@warning "-8"] [x ; List (_, y)]
                                 -> List (component.codomain, (List.map y ~f:(fun e -> component.evaluate [x ; e]))));
-              to_string = (fun [@warning "-8"] [a ; b] -> "(" ^ nameL ^ " " ^ a ^ " " ^ b ^ ")");
               global_constraints = component.global_constraints
             }]
   | l -> raise (Exceptions.Transformation_Exn (

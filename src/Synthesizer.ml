@@ -20,7 +20,7 @@ module Config = struct
     cost_attribute = Size ;
     logic = Logic.of_string "LIA" ;
     max_expressiveness_level = 1024 ;
-    min_satisfaction = 0.975 ;
+    min_satisfaction = 1.0 ;
     order = (fun g_cost e_cost -> (Int.to_float e_cost) *. (Float.log (Int.to_float g_cost))) ;
   }
 end
@@ -344,8 +344,17 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
                             ~f:(fun (cand_type, cands) comps
                                 -> List.iter comps ~f:(expand_component l level cost cands cand_type))))
 
+let add_ghost_variables_if_needed (task : task) : task =
+  if List.(exists task.inputs ~f:(fun i -> match Value.typeof i.(0) with Type.ARRAY (INT,_) -> true | _ -> false))
+  then {
+    task with
+    arg_names = Expr.ghost_variable_name :: task.arg_names ;
+    inputs = Array.(create ~len:(length task.outputs) (Value.Int 0)) :: task.inputs }
+  else task
+
 let solve ?(config = Config.default) (task : task) : result =
-  Log.debug (lazy ("Running enumerative synthesis with logic `" ^ (config.logic.name) ^ "`:"));
+  Log.debug (lazy ("Running (hybrid) enumerative synthesis with logic `" ^ (config.logic.name) ^ "`:"));
+  let task = add_ghost_variables_if_needed task in
   let start_time = Time.now () in
   let stats = { enumerated = 0 ; pruned = 0 ; synth_time_ms = 0.0 } in
   try solve_impl config task stats

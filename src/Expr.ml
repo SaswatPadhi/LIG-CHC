@@ -3,14 +3,22 @@ open Base
 open Utils
 open Exceptions
 
+let ghost_variable_name = "__idx__"
+
+(* FIXME: I think a better design would be to merge the `callable_args`
+ * and `domain` fields of the `component` structure,
+ * or may be some more general design for high-order functions
+ * callable_args : index of callable, name to be bound, domain, codomain
+ *)
 type component = {
-  evaluate : Value.t list -> Value.t ;
+  name : string ;
   codomain : Type.t ;
   domain : Type.t list ;
+  check_arg_ASTs : t list -> bool ;
+  callable_args : (int * string * Type.t * Type.t) list ;
+  evaluate : Value.t list -> Value.t ;
   to_string : string list -> string ;
   global_constraints : string list -> string list ;
-  check_arg_ASTs : t list -> bool ;
-  name : string ;
 } and t =
   | FCall of component * t list
   | Const of Value.t
@@ -22,6 +30,7 @@ module MakeComponent = struct
     name = "UNKNOWN" ;
     domain = [] ;
     codomain = Type.TVAR 0 ;
+    callable_args = [];
     evaluate = (fun _ -> raise (Internal_Exn "NOT IMPLEMENTED!")) ;
     to_string = (fun _ -> raise (Internal_Exn "NOT IMPLEMENTED!")) ;
     global_constraints = (fun _ -> []);

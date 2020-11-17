@@ -83,7 +83,7 @@ let select_a_k__with_duplicates () =
 let store_a_k_v__empty () =
 let open Synthesizer in
 let result = solve ~config:{ Config.default with logic = Logic.of_string "ALIA" } {
-  arg_names = [ "a" ; "k" ; "v"];
+  arg_names = [ "a" ; "k" ; "v" ];
   inputs = Value.[
     (Array.map ~f:(fun (a,b,c,d) -> Array (a,b,c,d))
                [| (Type.INT, Type.INT, [], Int 1)
@@ -121,7 +121,7 @@ let store_a_k_v__nonempty () =
 
 let store_a_k_v__with_duplicates () =
   let result = solve ~config:{ Config.default with logic = Logic.of_string "ALIA" } {
-    arg_names = [ "a" ; "k" ; "v"];
+    arg_names = [ "a" ; "k" ; "v" ];
     inputs = Value.[
       (Array.map ~f:(fun (a,b,c,d) -> Array (a,b,c,d))
                  [| (Type.INT, Type.INT, [ (Int 3, Int 20) ], Int 1)
@@ -141,7 +141,43 @@ let store_a_k_v__with_duplicates () =
     constants = []
   } in Alcotest.(check string) "identical" "(store a k v)" result.string
 
-let ge_y_len_x () =
+  let forall_test () =
+    let result = solve ~config:{ Config.default with cost_limit = 8; logic = Logic.of_string "ALIA" } {
+      arg_names = [ "a" ; "i" ; "j" ];
+      inputs = Value.[
+        (Array.map ~f:(fun (a,b,c,d) -> Array (a,b,c,d))
+                   [| (Type.INT, Type.INT,
+                       [ (Int 2, Int 3) ; (Int 1, Int 2) ; (Int 5, Int 60) ; (Int 4, Int 5) ; (Int 3, Int 4) ],
+                       Int 1)
+                    ; (Type.INT, Type.INT,
+                       [ (Int 1, Int 2) ; (Int 3, Int 4) ],
+                       Int 2)
+                    ; (Type.INT, Type.INT,
+                       [ (Int 3, Int 20) ; (Int 2, Int 3) ],
+                       Int 6)
+                    ; (Type.INT, Type.INT,
+                       [ (Int 1, Int 2) ; (Int 0, Int 2) ],
+                       Int 3)
+                    ; (Type.INT, Type.INT,
+                       [ (Int 1, Int 2) ; (Int 3, Int 4) ; (Int 2, Int 3) ],
+                       Int 4)
+                    ; (Type.INT, Type.INT,
+                       [ ],
+                       Int 4)
+                    |]);
+        [| Int 0 ; Int 1 ; Int 3 ; Int 0 ; Int 1 ; Int 1 |];
+        [| Int 4 ; Int 3 ; Int 3 ; Int 2 ; Int 2 ; Int 1 |] ];
+      outputs = Value.[|
+        Bool true ; 
+        Bool false ;
+        Bool false ;
+        Bool true ;
+        Bool true ;
+        Bool false |];
+      constants = []
+    } in Alcotest.(check string) "identical" "(forall ((a_idx Int)) (=> (and (<= i a_idx) (<= a_idx j)) (= (select a a_idx) (+ 1 a_idx))))" result.string
+  
+  let ge_y_len_x () =
   let open Synthesizer in
   let result = solve ~config:{ Config.default with logic = Logic.of_string "ALL" } {
     arg_names = [ "x" ; "y" ];
@@ -185,6 +221,7 @@ let all = [
   "(>= (+ x z) y)",                  `Quick, ge_plus_x_z_y ;
   "(not (= (= w x) (= y z)))",       `Quick, not_or_eq_w_x_eq_y_z ;
   "(select a k)",                    `Quick, select_a_k ;
+  "(forall ...)",                    `Quick, forall_test ;
   "(store a k v) ; empty",           `Quick, store_a_k_v__empty ;
   "(store a k v) ; non-empty",       `Quick, store_a_k_v__nonempty ;
   "(select a k)  ; with duplicates", `Quick, select_a_k__with_duplicates ;

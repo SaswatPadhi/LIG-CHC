@@ -59,30 +59,30 @@ let writes = reads @ [
   } ;
 ]
 
-(* let bounded_int_quantifiers = writes @ [
+let bounded_int_quantifiers = writes @ [
   {
     MakeComponent.base with
     name = "bounded-int-forall";
     codomain = Type.(BOOL);
-    domain = Type.[ARRAY (INT, TVAR 1); INT ; INT; INT; BOOL];
+    domain = Type.[ARRAY (INT, TVAR 1); INT; INT; BOOL];
     check_arg_ASTs = (function
                            (* TODO: The following check could be made tighter:
-                            * We could check that the last arg (the predicate)
-                            * uses the array (arg 1) and the index var (arg 2)
-                            *)
-                         | (Var _) :: (Var _) :: _ -> true
+                            * We should check that the last arg (the predicate)
+                            * uses the array (arg 1) *)
+                         | (Var _) :: _ -> true
                          | _ -> false);
+    callable_args = [ (4, Expr.ghost_variable_name, INT, BOOL) ];
     evaluate = Value.(fun [@warning "-8"]
-                      [Array (key_type, val_type, elems, default_val) ; (Int lb) ; _ ; (Int ub) ; pred]
+                      [Array (INT, INT, elems, default_val) ; (Int lb) ; (Int ub) ; Fun_ (INT, BOOL, pred)]
                       -> let idx_range = List.range ~stride:1 ~start:`inclusive ~stop:`inclusive lb ub
                           in Bool (List.for_all
                                idx_range
                                ~f:(fun key -> match List.Assoc.find elems ~equal:Value.equal (Int key) with
-                                              | None -> pred default_val
-                                              | Some value -> pred value)));
-    to_string = (fun [@warning "-8"] [_ ; name ; lb ; ub ; pred]
-                 -> "(forall ((" ^ name ^ " Int)) (=> (and " ^ lb ^ " " ^ ub ^ ") " ^ pred ^ "))")
+                                              | None -> equal (pred default_val) (Bool true)
+                                              | Some value -> equal (pred value) (Bool true))));
+    to_string = (fun [@warning "-8"] [arr_name ; lb ; ub ; pred]
+                 -> "(forall ((" ^ Expr.ghost_variable_name ^ " Int)) (=> (and " ^ lb ^ " " ^ ub ^ ") " ^ pred ^ "))")
   }
-] *)
+]
 
 let levels = [| equality ; reads ; writes (* *; bounded_int_quantifiers *) |]

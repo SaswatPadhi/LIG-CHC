@@ -6,6 +6,8 @@ open Utils
 include Bitv
 include Core.Comparable.Make (Bitv)
 
+let fold ~init ~f bv = Bitv.fold f init bv
+
 let signed_compare (v1 : t) (v2 : t) : int =
   let l1 = (length v1) - 1 and l2 = (length v2) - 1
    in if (unsafe_get v1 l1) && (not (unsafe_get v2 l2)) then -1
