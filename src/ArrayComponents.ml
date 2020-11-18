@@ -13,9 +13,10 @@ let get_unghosted_expr (expr: string) (subst: string) : string =
   let regex = Str.regexp "ghost_[^ ]* " in
   Str.global_substitute regex (fun _ -> subst) expr
 
+let equality_symbol: string = "="
 let equality = [
   {
-    (MakeComponent.binary ~symbol:"=" "equal") with
+    (MakeComponent.binary ~symbol:equality_symbol "equal") with
     codomain = Type.BOOL;
     domain = Type.[ARRAY (TVAR 1, TVAR 2); ARRAY (TVAR 1, TVAR 2)];
     check_arg_ASTs = (function
@@ -99,7 +100,7 @@ let forall = [
     name = "forall";
     codomain = Type.BOOL;
     domain = Type.[INT; INT; GHOST 1];
-    is_argument_valid = (function
+    check_arg_ASTs = (function
                           | _ -> true);
     evaluate = Value.(fun [@warning "-8"]
                       [ left_bound ; right_bound ; expr ]
@@ -123,6 +124,5 @@ let forall = [
             1. how do I get an expression with a hole in it here?
             2. how do I know which array to use with forall_var as index, and how can I get it given a ghost variable
         *)
-    global_constraints = (fun _ -> [])
   }
 ]

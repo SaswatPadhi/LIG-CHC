@@ -189,14 +189,12 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
   let int_candidates = empty_candidates () in
   let list_candidates = empty_candidates () in
   let string_candidates = empty_candidates () in
-  let ghost_candidates = empty_candidates () in 
 
   let typed_candidates ?(no_tvar = true) ~(level : int) ~(cost : int) = function
     | Type.ARRAY _  -> array_candidates.(level).(cost)
     | Type.BITVEC _ -> bitvec_candidates.(level).(cost)
     | Type.BOOL     -> bool_candidates.(level).(cost)
     | Type.CHAR     -> char_candidates.(level).(cost)
-    | Type.GHOST _  -> ghost_candidates.(level).(cost)
     | Type.INT      -> int_candidates.(level).(cost)
     | Type.LIST _   -> list_candidates.(level).(cost)
     | Type.STRING   -> string_candidates.(level).(cost)
