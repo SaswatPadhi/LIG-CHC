@@ -15,11 +15,12 @@ type component = {
   codomain : Type.t ;
   domain : Type.t list ;
   check_arg_ASTs : t list -> bool ;
-  callable_args : (int * string * Type.t * Type.t) list ;
+  callable_args : (int * (string * Type.t * Type.t)) list ;
   evaluate : Value.t list -> Value.t ;
   to_string : string list -> string ;
   global_constraints : string list -> string list ;
 } and t =
+  | ImplicitLambda of int * Type.t * Type.t * t
   | FCall of component * t list
   | Const of Value.t
   | Var of int
@@ -52,6 +53,19 @@ module MakeComponent = struct
   }
 end
 
+(* TODO: Use this to create levels after checking all references to individual levels thoughout the codebase *)
+(* let ( ++ ) a l =
+  let len_a = Array.length a
+   in Array.(init (len_a + 1) ~f:(fun i -> if i < len_a then a.(i) else ((last a) @ l))) *)
+
+let rec contains_free_ghost ghosts expr =
+  let rec helper = function
+    | FCall (_, exprs) -> List.iter ~f:helper exprs
+    | Var i -> if List.mem ghosts i ~equal:Int.equal then raise Caml.Exit
+    | _ -> ()
+  in try helper expr ; false
+     with Caml.Exit -> true
+
 let rec equal e1 e2 =
   match e1, e2 with
   | Var i1, Var i2 -> i1 = i2
@@ -65,23 +79,29 @@ let (=/=) = fun x y -> (not (equal x y))
 
 let is_constant expr =
   let rec helper = function
-    | Const _ -> ()
-    | Var _ -> raise Caml.Exit
     | FCall (_, exprs) -> List.iter ~f:helper exprs
+    | Var _ -> raise Caml.Exit
+    | Const _ -> ()
+    | ImplicitLambda (_, _, _ , e) -> helper e
   in try helper expr ; true
      with Caml.Exit -> false
 
 let rec to_string arg_names = function
   | FCall (comp, comp_args) -> comp.to_string (List.map ~f:(to_string arg_names) comp_args)
-  | Const v -> Value.to_string v
   | Var i -> arg_names.(i)
+  | Const v -> Value.to_string v
+  | ImplicitLambda (_, _, _, e) -> to_string arg_names e
 
 let rec to_function = function
   | FCall (comp, comp_args)
     -> let arg_funcs = List.map ~f:to_function comp_args
         in (fun args -> comp.evaluate (List.map arg_funcs ~f:(fun afunc -> afunc args)))
-  | Const v -> (fun _ -> v)
   | Var i -> (fun args -> List.nth_exn args i)
+  | Const v -> (fun _ -> v)
+  | ImplicitLambda (i, dom, codom, e)
+    -> let internal_fun = to_function e
+        in (fun args -> Value.Fun_ (dom, codom, (fun i_new -> let args = List.mapi args ~f:(fun j v -> if i = j then i_new else v)
+                                                               in internal_fun args)))
 
 let rec get_constraints arg_names = function
   | FCall (comp, comp_args)
@@ -91,10 +111,12 @@ let rec get_constraints arg_names = function
 
 let rec height = function
   | FCall (_, args) -> 1 + (List.fold_left ~f:max ~init:0 (List.map ~f:height args))
+  | ImplicitLambda (_, _, _, e) -> height e
   | _ -> 1
 
 let rec size = function
   | FCall (_, args) -> List.fold_left ~f:(+) ~init:1 (List.map ~f:size args)
+  | ImplicitLambda (_, _, _, e) -> size e
   | _ -> 1
 
 type synthesized = {
@@ -110,15 +132,3 @@ let unify_component (comp : component) (arg_types : Type.t list) : component opt
                 | None -> None
                 | Some codomain -> let domain = List.map comp.domain ~f:(substitute_with_exn env)
                                     in Some { comp with codomain ; domain }
-
-(* applies new component *)
-let apply (comp : component) (args : synthesized list) : synthesized option =
-  if (not (comp.check_arg_ASTs (List.map args ~f:(fun arg -> arg.expr)))) then None
-  else try
-    let select idx = List.map args ~f:(fun arg -> arg.outputs.(idx))
-    (* Todo: check args for ghost variables, if so, don't evaluate but return a lambda function like (fun ghost_a -> eval subexp)  *)
-     in Some { expr = FCall (comp, List.map ~f:(fun arg -> arg.expr) args)
-             ; outputs = Array.mapi (List.hd_exn args).outputs
-                                    ~f:(fun i _ -> comp.evaluate (select i)) }
-  with Internal_Exn e -> raise (Internal_Exn e)
-     | _ -> None
