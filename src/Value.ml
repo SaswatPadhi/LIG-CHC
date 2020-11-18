@@ -61,7 +61,7 @@ let of_atomic_string (s : string) : t =
     Bool (Bool.of_string s)
   with Invalid_argument _ -> try
     BitVec (Bitarray.of_string s)
-  with Invalid_argument _ -> try
+  with Parse_Exn _ -> try
     Char (Char.of_string (String.(chop_suffix_exn ~suffix:"\'"
                                     (chop_prefix_exn ~prefix:"\'" s))))
   with Invalid_argument _ -> try

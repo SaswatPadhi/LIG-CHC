@@ -78,7 +78,7 @@ let evaluate_component_application (task : task) (comp : Expr.component) (args :
              ; outputs = Array.mapi (List.hd_exn args).outputs
                                     ~f:(fun i _ -> comp.evaluate (select i)) }
   with Internal_Exn e -> raise (Internal_Exn e)
-     | e -> Log.debug (lazy ("  > Exception " ^ (Exn.to_string e) ^ " in " ^ comp.name
+     | e -> Log.trace (lazy ("  > Exception " ^ (Exn.to_string e) ^ " in " ^ comp.name
                             ^ " with [" ^ (List.to_string_map args ~sep:" , " ~f:(fun a -> Expr.to_string (Array.of_list task.arg_names) a.expr)) ^ "]"))
           ; None
 
@@ -257,7 +257,7 @@ let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stat
        @ (List.map task.constants ~f:(function Int x -> Int (abs x) | x -> x))))
   in
   let add_constant_candidate value =
-    Log.debug (lazy ("Registered constant: " ^ (Value.to_string value))) ;
+    Log.trace (lazy ("Registered constant: " ^ (Value.to_string value))) ;
     let candidate : Expr.synthesized = {
       expr = Expr.Const value;
       outputs = Array.create ~len:(Array.length task.outputs) value;
@@ -266,7 +266,7 @@ let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stat
   ;
 
   List.iteri task.inputs ~f:(fun i input ->
-    Log.debug (lazy ("Registered " ^ (Type.to_string (Value.typeof input.(0))) ^ " variable: " ^ (List.nth_exn task.arg_names i))) ;
+    Log.trace (lazy ("Registered " ^ (Type.to_string (Value.typeof input.(0))) ^ " variable: " ^ (List.nth_exn task.arg_names i))) ;
     ignore (add_candidate (typed_candidates (Value.typeof input.(0)) ~level:0 ~cost:1)
                           { expr = Expr.Var i ; outputs = input }))
   ;
@@ -278,9 +278,9 @@ let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stat
   let check (candidate : Expr.synthesized) =
     if Expr.contains_free_ghost ghosts candidate.expr then ()
     else begin
-      Log.debug (lazy ("  + Now checking (@ cost " ^ (Int.to_string (f_cost candidate.expr)) ^ "): "
+      Log.trace (lazy ("  + Now checking (@ cost " ^ (Int.to_string (f_cost candidate.expr)) ^ "): "
                         ^ (Expr.to_string (Array.of_list task.arg_names) candidate.expr))) ;
-      Log.debug (lazy ("   `- " ^ (Array.to_string_map ~sep:" ; " ~f:Value.to_string candidate.outputs))) ;
+      Log.trace (lazy ("   `- " ^ (Array.to_string_map ~sep:" ; " ~f:Value.to_string candidate.outputs))) ;
       let satisfaction = Array.fold2_exn task.outputs candidate.outputs ~init:0
                                         ~f:(fun acc x y -> if Value.equal x y then acc + 1 else acc)
       in if (satisfaction >= min_satisfaction) then raise (Success candidate.expr)
@@ -305,13 +305,13 @@ let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stat
     let applier (args : Expr.synthesized list) =
       stats.enumerated <- stats.enumerated + 1;
       begin
-        Log.debug (lazy ( "Attempting to unify " ^ component.name ^ " : [" ^ (List.to_string_map ~sep:"," ~f:Type.to_string component.domain)
+        Log.trace (lazy ( "Attempting to unify " ^ component.name ^ " : [" ^ (List.to_string_map ~sep:"," ~f:Type.to_string component.domain)
                         ^ "] -> " ^ (Type.to_string component.codomain)));
-        Log.debug (lazy ("with [" ^ (List.to_string_map args ~sep:" , "
+        Log.trace (lazy ("with [" ^ (List.to_string_map args ~sep:" , "
                                                         ~f:(fun a -> "(" ^ (Expr.to_string (Array.of_list task.arg_names) a.expr)
                                                                    ^ " : " ^ (Type.to_string (Value.typeof a.outputs.(0))) ^ ")")) ^ "]"));
         match Expr.unify_component component (List.map args ~f:(fun a -> Value.typeof a.outputs.(0))) with
-        | None -> Log.debug (lazy (" > Unification failure!"))
+        | None -> Log.trace (lazy (" > Unification failure!"))
         | Some unified_component -> begin
             let cod = Type.(match unified_component.codomain with
                             | ARRAY _ -> ARRAY (TVAR 0 , TVAR 0)
@@ -319,12 +319,12 @@ let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stat
                             | LIST _ -> LIST (TVAR 0)
                             | cod -> cod)
              in if not (Type.equal cod cand_type) then
-                  Log.debug (lazy ("  > The candidate type " ^ (Type.to_string cand_type) ^
+                  Log.trace (lazy ("  > The candidate type " ^ (Type.to_string cand_type) ^
                                    " did not match the codomain " ^ (Type.to_string cod)))
                 else begin
                   match evaluate_component_application task unified_component args with
                   | None
-                    -> Log.debug (lazy ("  > Unification successful, but rejected resulting candidate."))
+                    -> Log.trace (lazy ("  > Unification successful, but rejected resulting candidate."))
                      ; stats.pruned <- stats.pruned + 1
                   | Some result
                     -> let expr_cost = f_cost result.expr
@@ -335,7 +335,7 @@ let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stat
                                                    candidates.(expr_level).(expr_cost)
                                                    result)
                              then stats.pruned <- stats.pruned + 1
-                             else Log.debug (lazy ("  + Stored resulting expression"))
+                             else Log.trace (lazy ("  + Stored resulting expression"))
                            end
                   end
             end
@@ -350,7 +350,7 @@ let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stat
                  (List.cartesian_product (List.range 1 ~stop:`inclusive (Int.min config.max_expressiveness_level (Array.length config.logic.components_per_level)))
                                          (List.range 2 config.cost_limit))
   in
-  Log.debug (lazy ( "Exploration order (G,k):" ^ (Log.indented_sep 1)
+  Log.trace (lazy ( "Exploration order (G,k):" ^ (Log.indented_sep 1)
                   ^ (List.to_string_map ordered_level_cost ~sep:" > "
                        ~f:(fun (l,c) -> "(" ^ (Int.to_string l)
                                       ^ "," ^ (Int.to_string c) ^ ")"))))
@@ -391,7 +391,7 @@ let add_ghost_variables_if_needed (task : task) : int list * task =
   if List.(exists task.inputs ~f:(fun i -> match Value.typeof i.(0) with
                                            | Type.ARRAY (INT,_) -> true
                                            | _ -> false))
-  then (Log.debug (lazy ("Added ghost variable: " ^ Expr.ghost_variable_name)) ;
+  then (Log.trace (lazy ("Added ghost variable: " ^ Expr.ghost_variable_name)) ;
         ([ 0 ],
          { task with
            arg_names = Expr.ghost_variable_name :: task.arg_names ;

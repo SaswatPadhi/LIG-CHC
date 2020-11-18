@@ -4,12 +4,12 @@ let indented_sep (indent : int) = "\n" ^ (String.make (45 + indent) ' ')
 
 [%%if LOGGING = 0]
   (* If logging has been entirely disabled during compilation *)
-  let fatal _ = ()
-  let error _ = ()
-  let warn  _ = ()
-  let info  _ = ()
-  let debug _ = ()
 
+  let trace _ = ()
+  let debug _ = ()
+  let info  _ = ()
+  let error _ = ()
+  
   let disable () = ()
 
   let [@warning "-27"] enable ?msg ?level _ = ()
@@ -20,10 +20,11 @@ let indented_sep (indent : int) = "\n" ^ (String.make (45 + indent) ' ')
 
   open Core
 
-  type level = Debug | Error | Info
-  let level_str = function Debug -> "( debug )"
+  type level = Trace | Debug | Error | Info
+  let level_str = function Trace -> "( trace )"
+                         | Debug -> "[ debug ]"
+                         | Info  -> "[  info ]"
                          | Error -> "< ERROR >"
-                         | Info  -> "(  info )"
 
   let log_chan = ref stderr
   let log_level = ref Debug
@@ -32,7 +33,7 @@ let indented_sep (indent : int) = "\n" ^ (String.make (45 + indent) ' ')
   let should_log level =
     if not !is_enabled then false
     else match level, !log_level with
-         | Error , _ | Info , Info | _ , Debug -> true
+         | Error , _ | Info , Info | Info, Debug | Debug, Debug | _ , Trace -> true
          | _ -> false
 
   let do_log level lstr =
@@ -46,9 +47,10 @@ let indented_sep (indent : int) = "\n" ^ (String.make (45 + indent) ' ')
         (Lazy.force lstr)
     end
 
-  let info lstr = do_log Info lstr
-  let debug lstr = do_log Debug lstr
-  let error lstr = do_log Error lstr
+    let trace lstr = do_log Trace lstr
+    let debug lstr = do_log Debug lstr
+    let info lstr = do_log Info lstr
+    let error lstr = do_log Error lstr
 
   let disable () = is_enabled := false
 

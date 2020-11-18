@@ -25,7 +25,7 @@ let all_supported =
                    components_per_level = ArrayComponents.levels
                                        ** BooleanComponents.levels
                                        ** IntegerComponents.linear_levels ;
-                   sample_set_size_multiplier = 1 ;
+                   sample_set_size_multiplier = 4 ;
                    z3_name = "ALL"
                  } ; {
                    name = "ALL" ;
@@ -62,7 +62,7 @@ let all_supported =
                    name = "NIA" ;
                    components_per_level = BooleanComponents.levels
                                        ** IntegerComponents.non_linear_levels ;
-                   sample_set_size_multiplier = 8 ;
+                   sample_set_size_multiplier = 4 ;
                    z3_name = "NIA"
                  }]
     ; table
