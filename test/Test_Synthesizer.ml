@@ -196,7 +196,7 @@ let forall_test () =
       Bool true ;
       Bool false |];
     constants = [ ]
-  } in let result = solve ~config:{ Config.default with cost_limit = 15; logic = Logic.of_string "ALIA" } task
+  } in let result = solve ~config:{ Config.default with cost_limit = 10; logic = Logic.of_string "ALIA" } task
     in Alcotest.(check string)
          "identical"
          "(forall ((__idx__ Int)) (=> (and (<= i __idx__) (<= __idx__ j)) (> (select a __idx__) 1)))"

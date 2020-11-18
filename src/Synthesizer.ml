@@ -29,7 +29,7 @@ type task = {
   arg_names : string list ;
   inputs : Value.t array list ;
   outputs : Value.t array ;
-  constants : Value.t list
+  constants : Value.t list ;
 }
 
 type stats = {
@@ -179,7 +179,7 @@ let subtract ~(from : Expr.component list) (comps : Expr.component list) =
   List.filter from ~f:(fun c -> not (List.mem comps c
                                        ~equal:(fun c1 c2 -> String.equal c1.name c2.name)))
 
-let solve_impl (config : Config.t) (task : task) (stats : stats) =
+let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stats : stats) =
   let typed_components t_type =
     let equal_f cod = Type.(match cod , t_type with
                             | ARRAY _ , ARRAY _ -> true
@@ -276,12 +276,15 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
 
   let min_satisfaction = Float.(to_int (round_up (config.min_satisfaction *. of_int(Array.length task.outputs)))) in
   let check (candidate : Expr.synthesized) =
-    Log.debug (lazy ("  + Now checking (@ cost " ^ (Int.to_string (f_cost candidate.expr)) ^ "): "
-                       ^ (Expr.to_string (Array.of_list task.arg_names) candidate.expr))) ;
-    Log.debug (lazy ("   `- " ^ (Array.to_string_map ~sep:" ; " ~f:Value.to_string candidate.outputs))) ;
-    let satisfaction = Array.fold2_exn task.outputs candidate.outputs ~init:0
-                                       ~f:(fun acc x y -> if Value.equal x y then acc + 1 else acc)
-     in if (satisfaction >= min_satisfaction) then raise (Success candidate.expr)
+    if Expr.contains_free_ghost ghosts candidate.expr then ()
+    else begin
+      Log.debug (lazy ("  + Now checking (@ cost " ^ (Int.to_string (f_cost candidate.expr)) ^ "): "
+                        ^ (Expr.to_string (Array.of_list task.arg_names) candidate.expr))) ;
+      Log.debug (lazy ("   `- " ^ (Array.to_string_map ~sep:" ; " ~f:Value.to_string candidate.outputs))) ;
+      let satisfaction = Array.fold2_exn task.outputs candidate.outputs ~init:0
+                                        ~f:(fun acc x y -> if Value.equal x y then acc + 1 else acc)
+      in if (satisfaction >= min_satisfaction) then raise (Success candidate.expr)
+    end
   in
 
   let task_codomain = Value.typeof task.outputs.(1)
@@ -326,9 +329,11 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
                   | Some result
                     -> let expr_cost = f_cost result.expr
                         in if expr_cost < config.cost_limit
-                           then (if Type.equal task_codomain unified_component.codomain then check result)
-                         ; if not (add_candidate candidates.(expr_level).(expr_cost) result)
-                           then stats.pruned <- stats.pruned + 1
+                           then begin
+                             (if Type.equal task_codomain unified_component.codomain then check result) ;
+                             if not (add_candidate candidates.(expr_level).(expr_cost) result)
+                             then stats.pruned <- stats.pruned + 1
+                           end
                   end
             end
           end
@@ -379,22 +384,23 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
                             ~f:(fun (cand_type, cands) comps
                                 -> List.iter comps ~f:(expand_component l level cost cands cand_type))))
 
-let add_ghost_variables_if_needed (task : task) : bool * task =
+let add_ghost_variables_if_needed (task : task) : int list * task =
   if List.(exists task.inputs ~f:(fun i -> match Value.typeof i.(0) with
                                            | Type.ARRAY (INT,_) -> true
                                            | _ -> false))
   then (Log.debug (lazy ("Added ghost variable: " ^ Expr.ghost_variable_name)) ;
-        (true, { task with
-                 arg_names = Expr.ghost_variable_name :: task.arg_names ;
-                 inputs = Array.(create ~len:(length task.outputs) (Value.Int 0)) :: task.inputs }))
-  else (false, task)
+        ([ 0 ],
+         { task with
+           arg_names = Expr.ghost_variable_name :: task.arg_names ;
+           inputs = Array.(create ~len:(length task.outputs) (Value.Int 0)) :: task.inputs }))
+  else ([], task)
 
 let solve ?(config = Config.default) (task : task) : result =
   Log.debug (lazy ("Running (hybrid) enumerative synthesis with logic `" ^ (config.logic.name) ^ "`:"));
-  let ghost_var_added , task = add_ghost_variables_if_needed task in
+  let ghosts , task = add_ghost_variables_if_needed task in
   let start_time = Time.now () in
   let stats = { enumerated = 0 ; pruned = 0 ; synth_time_ms = 0.0 } in
-  try solve_impl config task stats
+  try solve_impl config task ~ghosts stats
     ; stats.synth_time_ms <- Time.(Span.(to_ms (diff (now ()) start_time)))
     ; raise NoSuchFunction
   with Success solution
@@ -402,9 +408,9 @@ let solve ?(config = Config.default) (task : task) : result =
           let solution_string = Expr.to_string arg_names_array solution in
           let solution_constraints = Expr.get_constraints arg_names_array solution in
           let solution_function = Expr.to_function solution in
-          let solution_function = if ghost_var_added
-                                  then (fun args -> solution_function ((Value.Int 0) :: args))
-                                  else solution_function
+          let solution_function = if List.is_empty ghosts
+                                  then solution_function
+                                  else (fun args -> solution_function ((Value.Int 0) :: args))
            in Log.debug (lazy ("  % Enumerated " ^ (Int.to_string stats.enumerated) ^ " expressions ("
                               ^ (Int.to_string stats.pruned) ^ " pruned)"))
             ; Log.debug (lazy ("  % Solution (@ size " ^ (Int.to_string (Expr.size solution))

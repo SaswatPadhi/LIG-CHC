@@ -53,6 +53,14 @@ module MakeComponent = struct
   }
 end
 
+let rec contains_free_ghost ghosts expr =
+  let rec helper = function
+    | FCall (_, exprs) -> List.iter ~f:helper exprs
+    | Var i -> if List.mem ghosts i ~equal:Int.equal then raise Caml.Exit
+    | _ -> ()
+  in try helper expr ; false
+     with Caml.Exit -> true
+
 let rec equal e1 e2 =
   match e1, e2 with
   | Var i1, Var i2 -> i1 = i2
