@@ -53,6 +53,11 @@ module MakeComponent = struct
   }
 end
 
+(* TODO: Use this to create levels after checking all references to individual levels thoughout the codebase *)
+(* let ( ++ ) a l =
+  let len_a = Array.length a
+   in Array.(init (len_a + 1) ~f:(fun i -> if i < len_a then a.(i) else ((last a) @ l))) *)
+
 let rec contains_free_ghost ghosts expr =
   let rec helper = function
     | FCall (_, exprs) -> List.iter ~f:helper exprs

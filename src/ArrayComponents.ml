@@ -3,7 +3,7 @@ open Core
 open Expr
 open Utils
 
-let max_bound_expr_size = 4
+let max_bound_expr_size = 1
 
 let shrink =
   List.dedup_and_stable_sort ~which_to_keep:`First
@@ -78,14 +78,10 @@ let bounded_int_quantifiers = writes @ [
                          | _ -> false);
     callable_args = [ (3, (Expr.ghost_variable_name, INT, BOOL)) ];
     evaluate = Value.(fun [@warning "-8"]
-                      [Array (INT, INT, elems, default_val) ; (Int lb) ; (Int ub) ; Fun_ (INT, BOOL, pred)]
-                      -> if ub < lb then raise Exit
-                       ; let idx_range = List.range ~stride:1 ~start:`inclusive ~stop:`inclusive lb ub
-                          in Bool (List.for_all
-                               idx_range
-                               ~f:(fun key -> match List.Assoc.find elems ~equal:Value.equal (Int key) with
-                                              | None -> equal (pred default_val) (Bool true)
-                                              | Some value -> equal (pred value) (Bool true))));
+                      [Array (INT, _, _, _) ; (Int lb) ; (Int ub) ; Fun_ (INT, BOOL, pred)]
+                      -> (if ub < lb then raise Exit)
+                       ; Bool List.(for_all (range ~stride:1 ~start:`inclusive ~stop:`inclusive lb ub)
+                                            ~f:(fun i -> Value.(equal (pred (Int i)) (Bool true)))));
     to_string = (fun [@warning "-8"] [arr_name ; lb ; ub ; pred]
                  -> "(forall ((" ^ Expr.ghost_variable_name ^ " Int)) (=> (and (<= " ^ lb ^ " " ^ Expr.ghost_variable_name ^ ") (<= " ^ Expr.ghost_variable_name ^ " " ^ ub ^ ")) " ^ pred ^ "))")
   }

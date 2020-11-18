@@ -168,10 +168,10 @@ let forall_test () =
     inputs = Value.[
       (Array.map ~f:(fun (a,b,c,d) -> Array (a,b,c,d))
                  [| (Type.INT, Type.INT,
-                     [ (Int 2, Int 3) ; (Int 1, Int 20) ; (Int 5, Int 0) ; (Int 4, Int 64) ; (Int 3, Int 40) ; (Int 0, Int 10) ],
+                     [ (Int 2, Int 3) ; (Int 1, Int 20) ; (Int 5, Int (-4)) ; (Int 4, Int 64) ; (Int 3, Int 40) ; (Int 0, Int 10) ],
                      Int (-10))
                   ; (Type.INT, Type.INT,
-                     [ (Int 1, Int 32) ; (Int 2, Int 40) ; (Int 0, Int 16) ; (Int 3, Int 8) ],
+                     [ (Int 1, Int 32) ; (Int 2, Int 40) ; (Int 0, Int 16) ; (Int 3, Int (-24)) ; (Int 4, Int 16) ],
                      Int (-2))
                   ; (Type.INT, Type.INT,
                      [ (Int 3, Int (-1)) ; (Int 2, Int (-3)) ; (Int 0, Int 3) ],
@@ -180,16 +180,16 @@ let forall_test () =
                      [ (Int 1, Int 24) ; (Int 0, Int 30) ],
                      Int 3)
                   ; (Type.INT, Type.INT,
-                     [ (Int 1, Int 24) ; (Int 3, Int (-4)) ; (Int 2, Int 3) ],
+                     [ (Int 1, Int 24) ; (Int 3, Int 48) ; (Int 2, Int 32) ; (Int 3, Int (-64)) ],
                      Int 0)
                   ; (Type.INT, Type.INT,
-                     [ (Int 2, Int 52) ; (Int 3, Int 10) ; (Int 5, Int 24) ],
+                     [ (Int 2, Int 52) ; (Int 3, Int 10) ; (Int 5, Int 24) ; (Int 7, Int 2) ; (Int 4, Int 48) ; (Int 6, Int 64) ],
                      Int 0)
                   |]);
       [| Int 0 ; Int 1 ; Int 3 ; Int 0 ; Int 1 ; Int 2 |];
-      [| Int 4 ; Int 3 ; Int 3 ; Int 2 ; Int 2 ; Int 5 |] ];
+      [| Int 4 ; Int 4 ; Int 3 ; Int 2 ; Int 3 ; Int 5 |] ];
     outputs = Value.[|
-      Bool true ; 
+      Bool true ;
       Bool false ;
       Bool false ;
       Bool true ;
@@ -199,7 +199,7 @@ let forall_test () =
   } in let result = solve ~config:{ Config.default with cost_limit = 10; logic = Logic.of_string "ALIA" } task
     in Alcotest.(check string)
          "identical"
-         "(forall ((__idx__ Int)) (=> (and (<= i __idx__) (<= __idx__ j)) (> (select a __idx__) 1)))"
+         "(forall ((__idx__ Int)) (=> (and (<= 1 __idx__) (<= __idx__ j)) (>= (select a __idx__) 1)))"
          result.string
      ; check_func task result
 
@@ -245,5 +245,15 @@ let all_mapR_ge_l_0 () =
      ; check_func task result
 
 let all = [
+  "(+ x y)",                         `Quick, plus_x_y ;
+  "(>= (+ x z) y)",                  `Quick, ge_plus_x_z_y ;
+  "(not (= (= w x) (= y z)))",       `Quick, not_or_eq_w_x_eq_y_z ;
+  "(select a k)",                    `Quick, select_a_k ;
   "(forall ...)",                    `Quick, forall_test ;
+  "(store a k v) ; empty",           `Quick, store_a_k_v__empty ;
+  "(store a k v) ; non-empty",       `Quick, store_a_k_v__nonempty ;
+  "(select a k)  ; with duplicates", `Quick, select_a_k__with_duplicates ;
+  "(store a k v) ; with duplicates", `Quick, store_a_k_v__with_duplicates ;
+  "(>= y (len x))",                  `Quick, ge_y_len_x ;
+  "(all (map-fixR-int-geq l 0))",    `Quick, all_mapR_ge_l_0 ;
 ]

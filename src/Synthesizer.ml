@@ -244,10 +244,10 @@ let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stat
   in
 
   let seen_outputs = ref (Set.empty (module Output)) in
-  let add_candidate candidates_set (candidate : Expr.synthesized) =
+  let add_candidate ?(force = false) candidates_set (candidate : Expr.synthesized) =
     let old_size = Set.length !seen_outputs
      in seen_outputs := Set.add !seen_outputs candidate.outputs
-      ; if (Set.length !seen_outputs) = old_size then false
+      ; if (not force) && (Set.length !seen_outputs) = old_size then false
         else (ignore (DList.insert_last candidates_set candidate) ; true)
   in
 
@@ -331,8 +331,11 @@ let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stat
                         in if expr_cost < config.cost_limit
                            then begin
                              (if Type.equal task_codomain unified_component.codomain then check result) ;
-                             if not (add_candidate candidates.(expr_level).(expr_cost) result)
+                             if not (add_candidate ~force:(Expr.contains_free_ghost ghosts result.expr)
+                                                   candidates.(expr_level).(expr_cost)
+                                                   result)
                              then stats.pruned <- stats.pruned + 1
+                             else Log.debug (lazy ("  + Stored resulting expression"))
                            end
                   end
             end
@@ -392,7 +395,7 @@ let add_ghost_variables_if_needed (task : task) : int list * task =
         ([ 0 ],
          { task with
            arg_names = Expr.ghost_variable_name :: task.arg_names ;
-           inputs = Array.(create ~len:(length task.outputs) (Value.Int 0)) :: task.inputs }))
+           inputs = Array.(init (length task.outputs) ~f:(fun i -> Value.Int (if i % 2 = 0 then (i+1) else (-i-1)))) :: task.inputs }))
   else ([], task)
 
 let solve ?(config = Config.default) (task : task) : result =
