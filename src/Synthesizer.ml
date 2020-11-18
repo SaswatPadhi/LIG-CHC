@@ -52,6 +52,36 @@ exception Success of Expr.t
 
 module DList = Doubly_linked
 
+let evaluate_component_application (task : task) (comp : Expr.component) (args : Expr.synthesized list)
+                                   : Expr.synthesized option =
+  if (not (comp.check_arg_ASTs (List.map args ~f:(fun arg -> arg.expr)))) then None
+  else try
+    let args =
+      List.mapi args ~f:(fun i arg -> match List.Assoc.find comp.callable_args i ~equal:Int.equal with
+                                      | None -> arg
+                                      | Some (name, t_dom, t_codom)
+                                        -> begin match List.findi task.arg_names ~f:(fun _ -> String.equal name) with
+                                             | None -> raise (Internal_Exn ("Cannot lambda-fy unknown variable: " ^ name))
+                                             | Some (j,_) -> { arg with expr = Expr.ImplicitLambda (j, t_dom, t_codom, arg.expr) }
+                                           end)
+     in
+    let select idx =
+          List.mapi args ~f:(fun i arg -> match List.Assoc.find comp.callable_args i ~equal:Int.equal with
+                                          | None -> arg.outputs.(idx)
+                                          | Some (name, t_dom, t_codom)
+                                            -> begin match arg.expr with
+                                                 | Expr.ImplicitLambda _
+                                                   -> (Expr.to_function arg.expr) (List.map task.inputs ~f:(fun inp -> inp.(idx)))
+                                                 | _ -> raise (Internal_Exn "Cannot create a callable value from a non-lambda expression")
+                                                end )
+     in Some { expr = FCall (comp, List.map ~f:(fun arg -> arg.expr) args)
+             ; outputs = Array.mapi (List.hd_exn args).outputs
+                                    ~f:(fun i _ -> comp.evaluate (select i)) }
+  with Internal_Exn e -> raise (Internal_Exn e)
+     | e -> Log.debug (lazy ("  > Exception " ^ (Exn.to_string e) ^ " in " ^ comp.name
+                            ^ " with [" ^ (List.to_string_map args ~sep:" , " ~f:(fun a -> Expr.to_string (Array.of_list task.arg_names) a.expr)) ^ "]"))
+          ; None
+
 let divide_size applier arity op_level expr_level remaining_size =
   let rec eq_helper arity remaining_size acc =
     if arity = 1 then
@@ -227,6 +257,7 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
        @ (List.map task.constants ~f:(function Int x -> Int (abs x) | x -> x))))
   in
   let add_constant_candidate value =
+    Log.debug (lazy ("Registered constant: " ^ (Value.to_string value))) ;
     let candidate : Expr.synthesized = {
       expr = Expr.Const value;
       outputs = Array.create ~len:(Array.length task.outputs) value;
@@ -235,7 +266,8 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
   ;
 
   List.iteri task.inputs ~f:(fun i input ->
-    ignore (add_candidate (typed_candidates (Value.typeof input.(1)) ~level:0 ~cost:1)
+    Log.debug (lazy ("Registered " ^ (Type.to_string (Value.typeof input.(0))) ^ " variable: " ^ (List.nth_exn task.arg_names i))) ;
+    ignore (add_candidate (typed_candidates (Value.typeof input.(0)) ~level:0 ~cost:1)
                           { expr = Expr.Var i ; outputs = input }))
   ;
 
@@ -244,8 +276,9 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
 
   let min_satisfaction = Float.(to_int (round_up (config.min_satisfaction *. of_int(Array.length task.outputs)))) in
   let check (candidate : Expr.synthesized) =
-    (* Log.debug (lazy ("  > Now checking (@ cost " ^ (Int.to_string (f_cost candidate.expr)) ^ "): "
-                       ^ (Expr.to_string (Array.of_list task.arg_names) candidate.expr))) ; *)
+    Log.debug (lazy ("  + Now checking (@ cost " ^ (Int.to_string (f_cost candidate.expr)) ^ "): "
+                       ^ (Expr.to_string (Array.of_list task.arg_names) candidate.expr))) ;
+    Log.debug (lazy ("   `- " ^ (Array.to_string_map ~sep:" ; " ~f:Value.to_string candidate.outputs))) ;
     let satisfaction = Array.fold2_exn task.outputs candidate.outputs ~init:0
                                        ~f:(fun acc x y -> if Value.equal x y then acc + 1 else acc)
      in if (satisfaction >= min_satisfaction) then raise (Success candidate.expr)
@@ -269,11 +302,11 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
     let applier (args : Expr.synthesized list) =
       stats.enumerated <- stats.enumerated + 1;
       begin
-      (*Log.debug (lazy ( "Attempting to unify " ^ component.name ^ " : [" ^ (List.to_string_map ~sep:"," ~f:Type.to_string component.domain)
+        Log.debug (lazy ( "Attempting to unify " ^ component.name ^ " : [" ^ (List.to_string_map ~sep:"," ~f:Type.to_string component.domain)
                         ^ "] -> " ^ (Type.to_string component.codomain)));
         Log.debug (lazy ("with [" ^ (List.to_string_map args ~sep:" , "
                                                         ~f:(fun a -> "(" ^ (Expr.to_string (Array.of_list task.arg_names) a.expr)
-                                                                   ^ " : " ^ (Type.to_string (Value.typeof a.outputs.(0))) ^ ")")) ^ "]")); *)
+                                                                   ^ " : " ^ (Type.to_string (Value.typeof a.outputs.(0))) ^ ")")) ^ "]"));
         match Expr.unify_component component (List.map args ~f:(fun a -> Value.typeof a.outputs.(0))) with
         | None -> Log.debug (lazy (" > Unification failure!"))
         | Some unified_component -> begin
@@ -286,8 +319,10 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
                   Log.debug (lazy ("  > The candidate type " ^ (Type.to_string cand_type) ^
                                    " did not match the codomain " ^ (Type.to_string cod)))
                 else begin
-                  match Expr.apply unified_component args with
-                  | None -> stats.pruned <- stats.pruned + 1
+                  match evaluate_component_application task unified_component args with
+                  | None
+                    -> Log.debug (lazy ("  > Unification successful, but rejected resulting candidate."))
+                     ; stats.pruned <- stats.pruned + 1
                   | Some result
                     -> let expr_cost = f_cost result.expr
                         in if expr_cost < config.cost_limit
@@ -307,7 +342,7 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
                  (List.cartesian_product (List.range 1 ~stop:`inclusive (Int.min config.max_expressiveness_level (Array.length config.logic.components_per_level)))
                                          (List.range 2 config.cost_limit))
   in
-  Log.debug (lazy ( "  $ Exploration order (G,k):" ^ (Log.indented_sep 3)
+  Log.debug (lazy ( "Exploration order (G,k):" ^ (Log.indented_sep 1)
                   ^ (List.to_string_map ordered_level_cost ~sep:" > "
                        ~f:(fun (l,c) -> "(" ^ (Int.to_string l)
                                       ^ "," ^ (Int.to_string c) ^ ")"))))
@@ -344,17 +379,19 @@ let solve_impl (config : Config.t) (task : task) (stats : stats) =
                             ~f:(fun (cand_type, cands) comps
                                 -> List.iter comps ~f:(expand_component l level cost cands cand_type))))
 
-let add_ghost_variables_if_needed (task : task) : task =
-  if List.(exists task.inputs ~f:(fun i -> match Value.typeof i.(0) with Type.ARRAY (INT,_) -> true | _ -> false))
-  then {
-    task with
-    arg_names = Expr.ghost_variable_name :: task.arg_names ;
-    inputs = Array.(create ~len:(length task.outputs) (Value.Int 0)) :: task.inputs }
-  else task
+let add_ghost_variables_if_needed (task : task) : bool * task =
+  if List.(exists task.inputs ~f:(fun i -> match Value.typeof i.(0) with
+                                           | Type.ARRAY (INT,_) -> true
+                                           | _ -> false))
+  then (Log.debug (lazy ("Added ghost variable: " ^ Expr.ghost_variable_name)) ;
+        (true, { task with
+                 arg_names = Expr.ghost_variable_name :: task.arg_names ;
+                 inputs = Array.(create ~len:(length task.outputs) (Value.Int 0)) :: task.inputs }))
+  else (false, task)
 
 let solve ?(config = Config.default) (task : task) : result =
   Log.debug (lazy ("Running (hybrid) enumerative synthesis with logic `" ^ (config.logic.name) ^ "`:"));
-  let task = add_ghost_variables_if_needed task in
+  let ghost_var_added , task = add_ghost_variables_if_needed task in
   let start_time = Time.now () in
   let stats = { enumerated = 0 ; pruned = 0 ; synth_time_ms = 0.0 } in
   try solve_impl config task stats
@@ -363,7 +400,11 @@ let solve ?(config = Config.default) (task : task) : result =
   with Success solution
        -> let arg_names_array = Array.of_list task.arg_names in
           let solution_string = Expr.to_string arg_names_array solution in
-          let solution_constraints = Expr.get_constraints arg_names_array solution
+          let solution_constraints = Expr.get_constraints arg_names_array solution in
+          let solution_function = Expr.to_function solution in
+          let solution_function = if ghost_var_added
+                                  then (fun args -> solution_function ((Value.Int 0) :: args))
+                                  else solution_function
            in Log.debug (lazy ("  % Enumerated " ^ (Int.to_string stats.enumerated) ^ " expressions ("
                               ^ (Int.to_string stats.pruned) ^ " pruned)"))
             ; Log.debug (lazy ("  % Solution (@ size " ^ (Int.to_string (Expr.size solution))
@@ -373,7 +414,7 @@ let solve ?(config = Config.default) (task : task) : result =
                                  else String.concat ~sep:" " solution_constraints ^ ")")))
             ; { expr = solution
               ; string = solution_string
-              ; func = Expr.to_function solution
+              ; func = solution_function
               ; constraints = solution_constraints
               ; stats = stats
               }
