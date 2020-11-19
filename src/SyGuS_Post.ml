@@ -119,7 +119,7 @@ let [@warning "-8"] get_update (i: string) (a: Sexp.t ): string =
 let [@warning "-8"] rec find_counter_updates (i_tail: string) (i_prime: string) (lst: Sexp.t list) : string list =
     match lst with 
         | h::t -> begin 
-            Printf.printf "\n find counter updates head:  %s \n" (Sexp.to_string_hum h);
+            (* Printf.printf "\n find counter updates head:  %s \n" (Sexp.to_string_hum h); *)
             match h with
             | Atom a -> (find_counter_updates i_tail i_prime t)
             | List [Atom "="; Atom i; ops]  -> 
@@ -190,7 +190,7 @@ let find_guard_candidates (constr : chc): loop_guard =
         [_;v1;v2] -> String.equal v1 counter_tail_variable || String.equal v2 counter_tail_variable)
     (** Assumption: only one guard candidate left in single loop scenario *)
     in let guard: string list = List.nth_exn guards 0 in
-    print_list guard;
+    (* print_list guard; *)
     (* in let ctrs = List.map guard_cands ~f:(fun c -> str_split c) guard_cands is already a string list) *)
     (* TODO for each counter get the second string which should be the variable that is used in the remaining tail with an increment or decrement *)
     (* in let counter_vars = List.map guards ~f:(match c with [rel;ctr;bound] -> ctr) *) (** old stuff *)
@@ -201,7 +201,7 @@ let find_guard_candidates (constr : chc): loop_guard =
     let assignments: string list = List.filter ~f:(fun s -> not (String.equal s "")) 
             (find_counter_updates counter_tail_variable counter_head_variable tail) in
   
-    print_list assignments;
+    (* print_list assignments; *)
 
     (** ASSUMPTION: only one expression that increments/decrements the counter in a single loop scenario *)
     let assmnt: string = List.nth_exn assignments 0 in 
@@ -250,7 +250,7 @@ let add_counter (obj : t) : t =
     let inits: chc list = List.filter ~f:(fun c -> not c.is_ind) constraints 
     in let init = List.nth_exn inits 0
     in let init_head = init.head in
-    print_invlist init_head;
+    (* print_invlist init_head; *)
     let counter_init: string = find_init init_head counter_cand.inv_index
     
     in let leftBound = if counter_cand.is_inc then counter_init else counter_cand.counter
