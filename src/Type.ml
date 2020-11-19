@@ -11,7 +11,6 @@ module T = struct
          | LIST of t
          | STRING
          | TVAR of int
-         | GHOST of int
          [@@deriving compare,sexp]
 end
 
@@ -42,7 +41,6 @@ let rec to_string : t -> string = function
   | INT         -> "Int"
   | LIST t      -> "(List " ^ (to_string t) ^ ")"
   | TVAR n      -> Int.to_string n
-  | GHOST n     -> Int.to_string n
     (* TODO: We may want to detect cases when a TVAR should never occur in a type,
              and throw exceptions in those cases *)
 
