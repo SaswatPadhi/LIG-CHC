@@ -92,11 +92,34 @@ let bounded_int_quantifiers = writes @ [
                                             ~f:(fun i -> Value.(equal (pred (Int i)) (Bool true)))));
     to_string = (fun [@warning "-8"] [arr_name ; lb ; ub ; pred]
                  -> "(forall ((" ^ Expr.ghost_variable_name ^ " Int)) (=> (and (<= " ^ lb ^ " " ^ Expr.ghost_variable_name ^ ") (<= " ^ Expr.ghost_variable_name ^ " " ^ ub ^ ")) " ^ pred ^ "))")
+  };
+  {
+    MakeComponent.base with
+    name = "bounded-int-exists";
+    codomain = Type.(BOOL);
+    domain = Type.[ARRAY (INT, TVAR 1); INT; INT; BOOL];
+    check_arg_ASTs = (function
+                           (* TODO: The following check could be made tighter:
+                            * We should check that the last arg (the predicate)
+                            * uses the array (arg 1) *)
+                         | [ (Var _) ; lb_expr ; ub_expr ; p ]
+                           -> (size lb_expr) <= max_bound_expr_size
+                           && (size lb_expr) <= max_bound_expr_size
+                           && (not (Expr.is_constant p))
+                         | _ -> false);
+    callable_args = [ (3, (Expr.ghost_variable_name, INT, BOOL)) ];
+    evaluate = Value.(fun [@warning "-8"]
+                      [Array (INT, _, _, _) ; (Int lb) ; (Int ub) ; Fun_ (INT, BOOL, pred)]
+                      -> (if ub < lb then raise Exit)
+                       ; Bool List.(exists (range ~stride:1 ~start:`inclusive ~stop:`inclusive lb ub)
+                                            ~f:(fun i -> Value.(equal (pred (Int i)) (Bool true)))));
+    to_string = (fun [@warning "-8"] [arr_name ; lb ; ub ; pred]
+                 -> "(exists ((" ^ Expr.ghost_variable_name ^ " Int)) (=> (and (<= " ^ lb ^ " " ^ Expr.ghost_variable_name ^ ") (<= " ^ Expr.ghost_variable_name ^ " " ^ ub ^ ")) " ^ pred ^ "))")
   }
 ]
 
 
-let forall = [
+(* let forall = [
   {
     name = "forall";
     codomain = Type.BOOL;
@@ -126,5 +149,6 @@ let forall = [
             2. how do I know which array to use with forall_var as index, and how can I get it given a ghost variable
         *)
   }
-]
+] *)
+
 let levels = [| equality ; reads ; writes ; bounded_int_quantifiers |]

@@ -203,6 +203,47 @@ let forall_test () =
          result.string
      ; check_func task result
 
+let exists_test () =
+  let task = {
+    arg_names = [ "a" ; "i" ; "j" ];
+    inputs = Value.[
+      (Array.map ~f:(fun (a,b,c,d) -> Array (a,b,c,d))
+                 [| (Type.INT, Type.INT,
+                     [ (Int 2, Int 3) ; (Int 1, Int (-2)) ; (Int 5, Int (-4)) ; (Int 4, Int 0) ; (Int 3, Int 5) ; (Int 0, Int (-1)) ],
+                     Int (-10))
+                  ; (Type.INT, Type.INT,
+                     [ (Int 1, Int (-32)) ; (Int 2, Int 2) ; (Int 0, Int 4) ; (Int 3, Int (-24)) ; (Int 4, Int 3) ],
+                     Int (-2))
+                  ; (Type.INT, Type.INT,
+                     [ (Int 3, Int (-1)) ; (Int 2, Int (-3)) ; (Int 0, Int 3) ; (Int 1, Int 3) ],
+                     Int 0)
+                  ; (Type.INT, Type.INT,
+                     [ (Int 1, Int 1) ; (Int 0, Int 2) ],
+                     Int 3)
+                  ; (Type.INT, Type.INT,
+                     [ (Int 1, Int 24) ; (Int 3, Int 48) ; (Int 2, Int 3) ; (Int 3, Int (-64)) ; (Int (-64), Int (-3)) ],
+                     Int 0)
+                  ; (Type.INT, Type.INT,
+                     [ (Int 2, Int 2) ; (Int 3, Int (-10)) ; (Int 5, Int 3) ; (Int 7, Int 5) ; (Int 4, Int 3) ; (Int 6, Int 64) ],
+                     Int 0)
+                  |]);
+      [| Int 0 ; Int 1 ; Int 3 ; Int 1 ; Int 1 ; Int 2 |];
+      [| Int 4 ; Int 4 ; Int 3 ; Int 2 ; Int 3 ; Int 5 |] ];
+    outputs = Value.[|
+      Bool true ;
+      Bool false ;
+      Bool false ;
+      Bool true ;
+      Bool true ;
+      Bool false |];
+    constants = [ ]
+  } in let result = solve ~config:{ Config.default with cost_limit = 10; logic = Logic.of_string "ALIA" } task
+    in Alcotest.(check string)
+         "identical"
+         "(exists ((__idx__ Int)) (=> (and (<= i __idx__) (<= __idx__ j)) (>= (select a __idx__) j)))"
+         result.string
+     ; check_func task result
+
 let ge_y_len_x () =
   let task = {
     arg_names = [ "x" ; "y" ];
@@ -250,6 +291,7 @@ let all = [
   "(not (= (= w x) (= y z)))",       `Quick, not_or_eq_w_x_eq_y_z ;
   "(select a k)",                    `Quick, select_a_k ;
   "(forall ...)",                    `Quick, forall_test ;
+  "(exists ...)",                    `Quick, exists_test ;
   "(store a k v) ; empty",           `Quick, store_a_k_v__empty ;
   "(store a k v) ; non-empty",       `Quick, store_a_k_v__nonempty ;
   "(select a k)  ; with duplicates", `Quick, select_a_k__with_duplicates ;
