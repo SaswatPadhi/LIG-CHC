@@ -49,6 +49,8 @@ let check_chc ?(scoped = true)
                      ~f:(fun acc v -> (SyGuS.var_declaration v) :: acc)
    in not (ZProc.check_sat z3 ~db ~scoped)
 
+
+(* checks sat/unsat with z3 for a given set of clauses = candidates *)
 let check ~(z3 : ZProc.t)
           (sygus : SyGuS.t)
           (candidates : candidate array)
@@ -73,6 +75,7 @@ let check ~(z3 : ZProc.t)
                                  ; raise (CounterExample { q_type = `Constraint ; chc ; head_states ; tail_states })) ;
   ZProc.close_scope z3
 
+(* counterexample extraction *)
 let rec solve_impl ?(config = Config.default)
                    (sygus : SyGuS.t)
                    (candidates : candidate array)

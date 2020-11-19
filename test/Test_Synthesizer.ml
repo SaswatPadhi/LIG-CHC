@@ -203,6 +203,7 @@ let forall_test () =
          result.string
      ; check_func task result
 
+(* TODO: fix test such that it uses exists component, for now it only generates bounded expressions *)
 let exists_test () =
   let task = {
     arg_names = [ "a" ; "i" ; "j" ];
@@ -224,18 +225,26 @@ let exists_test () =
                      [ (Int 1, Int 24) ; (Int 3, Int 48) ; (Int 2, Int 3) ; (Int 3, Int (-64)) ; (Int (-64), Int (-3)) ],
                      Int 0)
                   ; (Type.INT, Type.INT,
-                     [ (Int 2, Int 2) ; (Int 3, Int (-10)) ; (Int 5, Int 3) ; (Int 7, Int 5) ; (Int 4, Int 3) ; (Int 6, Int 64) ],
+                     [ (Int 2, Int 2) ; (Int 3, Int 0) ; (Int 5, Int 3) ; (Int 7, Int 5) ; (Int 4, Int 3) ; (Int 6, Int 64) ],
                      Int 0)
+                  ; (Type.INT, Type.INT,
+                     [ (Int 2, Int 3) ; (Int 3, Int 0) ; (Int 5, Int 3) ; (Int 7, Int 5) ; (Int 4, Int 3) ; (Int 0, Int 64) ],
+                     Int 4)
+                  ; (Type.INT, Type.INT,
+                     [ (Int 2, Int 3) ; (Int 3, Int 5) ; (Int 5, Int 3) ; (Int 7, Int 5) ; (Int 4, Int 3) ; (Int 0, Int 64) ],
+                     Int 4)
                   |]);
-      [| Int 0 ; Int 1 ; Int 3 ; Int 1 ; Int 1 ; Int 2 |];
-      [| Int 4 ; Int 4 ; Int 3 ; Int 2 ; Int 3 ; Int 5 |] ];
+      [| Int 0 ; Int 1 ; Int 3 ; Int 1 ; Int 1 ; Int 2; Int 1 ; Int 1 |];
+      [| Int 4 ; Int 4 ; Int 3 ; Int 2 ; Int 3 ; Int 5; Int 3 ; Int 5 |] ];
     outputs = Value.[|
       Bool true ;
       Bool false ;
       Bool false ;
       Bool true ;
       Bool true ;
-      Bool false |];
+      Bool false ;
+      Bool true ;
+      Bool true |];
     constants = [ ]
   } in let result = solve ~config:{ Config.default with cost_limit = 10; logic = Logic.of_string "ALIA" } task
     in Alcotest.(check string)

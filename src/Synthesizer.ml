@@ -179,6 +179,7 @@ let subtract ~(from : Expr.component list) (comps : Expr.component list) =
   List.filter from ~f:(fun c -> not (List.mem comps c
                                        ~equal:(fun c1 c2 -> String.equal c1.name c2.name)))
 
+(* what does this do??? *)
 let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stats : stats) =
   let typed_components t_type =
     let equal_f cod = Type.(match cod , t_type with
@@ -265,7 +266,6 @@ let solve_impl (config : Config.t) (task : task) ?(ghosts : int list = []) (stat
   in List.(iter (rev constants) ~f:add_constant_candidate)
   ;
 
-(* add ghost variable holders for each array *)
   List.iteri task.inputs ~f:(fun i input ->
     Log.trace (lazy ("Registered " ^ (Type.to_string (Value.typeof input.(0))) ^ " variable: " ^ (List.nth_exn task.arg_names i))) ;
     ignore (add_candidate (typed_candidates (Value.typeof input.(0)) ~level:0 ~cost:1)
