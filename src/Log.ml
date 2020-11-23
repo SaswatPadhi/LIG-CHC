@@ -1,5 +1,7 @@
 let indented_sep (indent : int) = "\n" ^ (String.make (45 + indent) ' ')
 
+type level = Trace | Debug | Error | Info
+
 [%%import "config.h"]
 
 [%%if LOGGING = 0]
@@ -18,9 +20,6 @@ let indented_sep (indent : int) = "\n" ^ (String.make (45 + indent) ' ')
    * during a particular execution. Logging functions therefore accept `lazy`
    * strings that are forced only when they are actually logged. *)
 
-  open Core
-
-  type level = Trace | Debug | Error | Info
   let level_str = function Trace -> "( trace )"
                          | Debug -> "[ debug ]"
                          | Info  -> "[  info ]"
@@ -39,6 +38,7 @@ let indented_sep (indent : int) = "\n" ^ (String.make (45 + indent) ' ')
   let do_log level lstr =
     if should_log level
     then begin
+      let open Core in
       Out_channel.fprintf
         !log_chan
         "%s  %s  %s\n"
@@ -57,7 +57,7 @@ let indented_sep (indent : int) = "\n" ^ (String.make (45 + indent) ' ')
   let enable ?(msg = "") ?(level = Debug) = function
     | None -> ()
     | Some filename
-      -> log_chan := Out_channel.create ~append:true filename
+      -> log_chan := Core.Out_channel.create ~append:true filename
        ; log_level := level
        ; is_enabled := true
        ; info (lazy "")

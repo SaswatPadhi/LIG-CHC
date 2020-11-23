@@ -162,7 +162,7 @@ let store_a_k_v__with_duplicates () =
     in Alcotest.(check string) "identical" "(store a k v)" result.string
      ; check_func task result
 
-let forall_test () =
+let simple_forall_test () =
   let task = {
     arg_names = [ "a" ; "i" ; "j" ];
     inputs = Value.[
@@ -197,6 +197,50 @@ let forall_test () =
       Bool false |];
     constants = [ ]
   } in let result = solve ~config:{ Config.default with cost_limit = 10; logic = Logic.of_string "ALIA" } task
+    in Alcotest.(check string)
+         "identical"
+         "(forall ((__idx__ Int)) (=> (and (<= 1 __idx__) (<= __idx__ j)) (>= (select a __idx__) 1)))"
+         result.string
+     ; check_func task result
+
+let forall_test () =
+  let pred elems default_val key =
+    let open Value in
+    match default_val, (List.Assoc.find elems ~equal:equal key) with
+    | (Int def), None -> Bool (def >= 1)
+    | _, Some (Int value) -> Bool (value >= 1)
+    | _ -> Bool false
+   in
+  let check elms def i j =
+    1 <= j &&
+    List.(for_all (range ~stride:1 ~start:`inclusive ~stop:`inclusive 1 j)
+                  ~f:(fun k -> Value.(equal (pred elms def (Int k)) (Bool true))))
+   in
+  let num_data_points = 16 in
+  let raw_input_data =
+    let config = { TestGen.Config.default with min_int = 0 ; max_int = 16 }
+     in List.zip_exn (TestGen.list_of_random_values ~config num_data_points Type.(ARRAY (INT, INT)))
+                     (List.zip_exn (TestGen.list_of_random_values ~config:{ config with seed = `Deterministic "seed1"} num_data_points Type.INT)
+                                   (TestGen.list_of_random_values ~config:{ config with seed = `Deterministic "seed2"} num_data_points Type.INT))
+  in
+  let inputs , outputs =
+    List.fold_left
+      ~init:([[];[];[]], [])
+      raw_input_data
+      ~f:Value.(fun [@warning "-8"] ([a_inp; i_inp; j_inp], a_out) ((Array (t_k, t_v, elms, def)), ((Int i),(Int j)))
+                -> let res = check elms def i j
+                    in Log.debug (lazy ("+ " ^ (Bool.to_string res) ^ " -> (" ^ (Int.to_string i) ^ "," ^ (Int.to_string j) ^ ")  ;  "
+                                                                    ^ (Value.to_string (Array (t_k, t_v, elms, def)))))
+                     ; ([ (Array (t_k, t_v, elms, def)) :: a_inp ; (Int i) :: i_inp ; (Int j) :: j_inp ],
+                        ((Bool res :: a_out))))
+   in
+  let task = {
+    arg_names = [ "a" ; "i" ; "j" ];
+    inputs = List.map ~f:Array.of_list inputs ;
+    outputs = Array.of_list outputs ;
+    constants = [ ]
+  } in
+  let result = solve ~config:{ Config.default with cost_limit = 10; logic = Logic.of_string "ALIA" } task
     in Alcotest.(check string)
          "identical"
          "(forall ((__idx__ Int)) (=> (and (<= 1 __idx__) (<= __idx__ j)) (>= (select a __idx__) 1)))"
@@ -249,6 +293,7 @@ let all = [
   "(>= (+ x z) y)",                  `Quick, ge_plus_x_z_y ;
   "(not (= (= w x) (= y z)))",       `Quick, not_or_eq_w_x_eq_y_z ;
   "(select a k)",                    `Quick, select_a_k ;
+  "(forall ...) ; simple",           `Quick, simple_forall_test ;
   "(forall ...)",                    `Quick, forall_test ;
   "(store a k v) ; empty",           `Quick, store_a_k_v__empty ;
   "(store a k v) ; non-empty",       `Quick, store_a_k_v__nonempty ;

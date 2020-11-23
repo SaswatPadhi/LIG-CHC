@@ -79,9 +79,9 @@ let bounded_int_quantifiers = writes @ [
     callable_args = [ (2, (ghost_variable_name, INT, BOOL)) ];
     evaluate = Value.(fun [@warning "-8"]
                       [(Int lb) ; (Int ub) ; Fun_ (INT, BOOL, pred)]
-                      -> (if ub < lb then raise Exit)
-                       ; Bool List.(for_all (range ~stride:1 ~start:`inclusive ~stop:`inclusive lb ub)
-                                            ~f:(fun i -> Value.(equal (pred (Int i)) (Bool true)))));
+                      -> if ub < lb then (Bool false) else (
+                           Bool List.(for_all (range ~stride:1 ~start:`inclusive ~stop:`inclusive lb ub)
+                                              ~f:(fun i -> Value.(equal (pred (Int i)) (Bool true))))));
     to_string = (fun [@warning "-8"] [lb ; ub ; pred]
                  -> "(forall ((" ^ ghost_variable_name ^ " Int)) (=> (and (<= " ^ lb ^ " " ^ ghost_variable_name ^ ") (<= " ^ ghost_variable_name ^ " " ^ ub ^ ")) " ^ pred ^ "))")
   }
