@@ -25,7 +25,7 @@ let all_supported =
                    components_per_level = ArrayComponents.levels
                                        ** BooleanComponents.levels
                                        ** IntegerComponents.linear_levels ;
-                   sample_set_size_multiplier = 4 ;
+                   sample_set_size_multiplier = 2 ;
                    z3_name = "ALL"
                  } ; {
                    name = "ALL" ;

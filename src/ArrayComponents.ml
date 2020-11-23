@@ -74,30 +74,30 @@ let bounded_int_quantifiers = writes @ [
     MakeComponent.base with
     name = "bounded-int-forall";
     codomain = Type.(BOOL);
-    domain = Type.[ARRAY (INT, TVAR 1); INT; INT; BOOL];
+    domain = Type.[INT; INT; BOOL];
     check_arg_ASTs = (function
                            (* TODO: The following check could be made tighter:
                             * We should check that the last arg (the predicate)
                             * uses the array (arg 1) *)
-                         | [ (Var _) ; lb_expr ; ub_expr ; p ]
-                           -> (size lb_expr) <= max_bound_expr_size
+                         | [ lb_expr ; ub_expr ; p ]
+                           -> (size lb_expr) <= max_bound_expr_size 
                            && (size lb_expr) <= max_bound_expr_size
-                           && (not (Expr.is_constant p))
+                           && (not (is_constant p))
                          | _ -> false);
-    callable_args = [ (3, (Expr.ghost_variable_name, INT, BOOL)) ];
+    callable_args = [ (2, (ghost_variable_name, INT, BOOL)) ];
     evaluate = Value.(fun [@warning "-8"]
-                      [Array (INT, _, _, _) ; (Int lb) ; (Int ub) ; Fun_ (INT, BOOL, pred)]
+                      [(Int lb) ; (Int ub) ; Fun_ (INT, BOOL, pred)]
                       -> (if ub < lb then raise Exit)
                        ; Bool List.(for_all (range ~stride:1 ~start:`inclusive ~stop:`inclusive lb ub)
                                             ~f:(fun i -> Value.(equal (pred (Int i)) (Bool true)))));
-    to_string = (fun [@warning "-8"] [arr_name ; lb ; ub ; pred]
-                 -> "(forall ((" ^ Expr.ghost_variable_name ^ " Int)) (=> (and (<= " ^ lb ^ " " ^ Expr.ghost_variable_name ^ ") (<= " ^ Expr.ghost_variable_name ^ " " ^ ub ^ ")) " ^ pred ^ "))")
+    to_string = (fun [@warning "-8"] [ lb ; ub ; pred]
+                 -> "(forall ((" ^ ghost_variable_name ^ " Int)) (=> (and (<= " ^ lb ^ " " ^ ghost_variable_name ^ ") (<= " ^ ghost_variable_name ^ " " ^ ub ^ ")) " ^ pred ^ "))")
   };
   {
     MakeComponent.base with
     name = "bounded-int-exists";
     codomain = Type.(BOOL);
-    domain = Type.[ARRAY (INT, TVAR 1); INT; INT; BOOL];
+    domain = Type.[INT; INT; BOOL];
     check_arg_ASTs = (function
                            (* TODO: The following check could be made tighter:
                             * We should check that the last arg (the predicate)
@@ -107,14 +107,14 @@ let bounded_int_quantifiers = writes @ [
                            && (size lb_expr) <= max_bound_expr_size
                            && (not (Expr.is_constant p))
                          | _ -> false);
-    callable_args = [ (3, (Expr.ghost_variable_name, INT, BOOL)) ];
+    callable_args = [ (3, (ghost_variable_name, INT, BOOL)) ];
     evaluate = Value.(fun [@warning "-8"]
                       [Array (INT, _, _, _) ; (Int lb) ; (Int ub) ; Fun_ (INT, BOOL, pred)]
                       -> (if ub < lb then raise Exit)
                        ; Bool List.(exists (range ~stride:1 ~start:`inclusive ~stop:`inclusive lb ub)
                                             ~f:(fun i -> Value.(equal (pred (Int i)) (Bool true)))));
     to_string = (fun [@warning "-8"] [arr_name ; lb ; ub ; pred]
-                 -> "(exists ((" ^ Expr.ghost_variable_name ^ " Int)) (=> (and (<= " ^ lb ^ " " ^ Expr.ghost_variable_name ^ ") (<= " ^ Expr.ghost_variable_name ^ " " ^ ub ^ ")) " ^ pred ^ "))")
+                 -> "(exists ((" ^ ghost_variable_name ^ " Int)) (=> (and (<= " ^ lb ^ " " ^ ghost_variable_name ^ ") (<= " ^ ghost_variable_name ^ " " ^ ub ^ ")) " ^ pred ^ "))")
   }
 ]
 
