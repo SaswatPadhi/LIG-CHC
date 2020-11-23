@@ -118,32 +118,44 @@ let bounded_int_quantifiers = writes @ [
   }
 ]
 
-let bounded_range_quantifiers = bounded_int_quantifiers @ [
-  {
-    MakeComponent.base with
-    name = "bounded-int-forall";
-    codomain = Type.(BOOL);
-    domain = Type.[ARRAY (INT, TVAR 1); INT; INT; BOOL];
-    check_arg_ASTs = (function
+
+let fixed_range_quantifier (component : component) (range : (Value.t * Value.t)) : component =
+  let left_bound, right_bound = range in 
+  if not (Type.equal (Value.typeof left_bound) Type.INT) 
+    || not (Type.equal (Value.typeof right_bound) Type.INT) 
+  then raise (Exceptions.Transformation_Exn (
+                  "Cannot transform " ^ component.name))
+  else
+  (* check left_bound rightbound are typeof Type.INT *)
+  match component.domain with
+  | [INT; INT; BOOL] -> let name = "range-" ^ component.name
+              in { (MakeComponent.base) with
+                   name = name; 
+                   codomain = component.codomain;
+                   (* domain = Type.[ARRAY (INT, TVAR 1); BOOL]; *)
+                   domain = Type.[BOOL];
+                   check_arg_ASTs = (function 
                            (* TODO: The following check could be made tighter:
                             * We should check that the last arg (the predicate)
                             * uses the array (arg 1) *)
-                         | [ (Var _) ; lb_expr ; ub_expr ; p ]
-                           -> (size lb_expr) <= max_bound_expr_size
-                           && (size lb_expr) <= max_bound_expr_size
-                           && (not (Expr.is_constant p))
-                         | _ -> false);
-    callable_args = [ (3, (Expr.ghost_variable_name, INT, BOOL)) ];
-    evaluate = Value.(fun [@warning "-8"]
-                      [Array (INT, _, _, _) ; (Int lb) ; (Int ub) ; Fun_ (INT, BOOL, pred)]
-                      -> (if ub < lb then raise Exit)
-                       ; Bool List.(for_all (range ~stride:1 ~start:`inclusive ~stop:`inclusive lb ub)
-                                            ~f:(fun i -> Value.(equal (pred (Int i)) (Bool true)))));
-    to_string = (fun [@warning "-8"] [arr_name ; lb ; ub ; pred]
-                 -> "(forall ((" ^ Expr.ghost_variable_name ^ " Int)) (=> (and (<= " ^ lb ^ " " ^ Expr.ghost_variable_name ^ ") (<= " ^ Expr.ghost_variable_name ^ " " ^ ub ^ ")) " ^ pred ^ "))")
-  };
+                         (* && contains_select p *)
+                         | [ p ] -> (not (is_constant p))
+                         | _ -> false
+                         );
+                   callable_args = component.callable_args;
+                   evaluate = Value.(fun [@warning "-8"] [ func ]
+                                  -> component.evaluate [ left_bound ; right_bound ; func ]
+                              );
+                   to_string = (fun [@warning "-8"] [pred]
+                          -> "(forall ((" ^ ghost_variable_name ^ " Int)) (=> (and (<= " ^ Value.to_string left_bound ^ " " ^ ghost_variable_name ^ ") (<= " ^ ghost_variable_name ^ " " ^ Value.to_string right_bound ^ ")) " ^ pred ^ "))")
+                  }
+  | _ -> raise (Exceptions.Transformation_Exn (
+                  "Cannot transform " ^ component.name))
 
-]
+(* let all_transformed_int_unary =
+  all @ (List.filter_map (BooleanComponents.all @ IntegerComponents.polynomials)
+                         ~f:(fun c -> try Some (map_transform_unary c)
+                                      with _ -> None)) *)
 
 
 (* let forall = [
