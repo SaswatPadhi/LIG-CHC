@@ -12,10 +12,10 @@ module Config = struct
   }
 
   let default : t = {
-    max_length = 16 ;
+    max_length = 32 ;
     min_length = 0 ;
-    max_int = 63 ;
-    min_int = -64 ;
+    max_int = 1023 ;
+    min_int = -1024 ;
     seed = `Deterministic "SomeRandomSeed"
   }
 end

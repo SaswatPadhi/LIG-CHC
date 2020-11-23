@@ -211,17 +211,16 @@ let forall_test () =
     | _, Some (Int value) -> Bool (value >= 1)
     | _ -> Bool false
    in
-  let check elms def i j =
-    1 <= j &&
-    List.(for_all (range ~stride:1 ~start:`inclusive ~stop:`inclusive 1 j)
+  let check elms def lb jub =
+    lb <= jub &&
+    List.(for_all (range ~stride:1 ~start:`inclusive ~stop:`inclusive lb jub)
                   ~f:(fun k -> Value.(equal (pred elms def (Int k)) (Bool true))))
    in
-  let num_data_points = 16 in
+  let num_data_points = 256 in
   let raw_input_data =
-    let config = { TestGen.Config.default with min_int = 0 ; max_int = 16 }
-     in List.zip_exn (TestGen.list_of_random_values ~config num_data_points Type.(ARRAY (INT, INT)))
-                     (List.zip_exn (TestGen.list_of_random_values ~config:{ config with seed = `Deterministic "seed1"} num_data_points Type.INT)
-                                   (TestGen.list_of_random_values ~config:{ config with seed = `Deterministic "seed2"} num_data_points Type.INT))
+    List.zip_exn (TestGen.list_of_random_values num_data_points Type.(ARRAY (INT, INT)))
+                 (List.zip_exn (TestGen.list_of_random_values ~config:{ TestGen.Config.default with seed = `Deterministic "seed1"} num_data_points Type.INT)
+                               (TestGen.list_of_random_values ~config:{ TestGen.Config.default with seed = `Deterministic "seed2"} num_data_points Type.INT))
   in
   let inputs , outputs =
     List.fold_left
@@ -243,7 +242,7 @@ let forall_test () =
   let result = solve ~config:{ Config.default with cost_limit = 10; logic = Logic.of_string "ALIA" } task
     in Alcotest.(check string)
          "identical"
-         "(forall ((__idx__ Int)) (=> (and (<= 1 __idx__) (<= __idx__ j)) (>= (select a __idx__) 1)))"
+         "(forall ((__idx__ Int)) (=> (and (<= i __idx__) (<= __idx__ j)) (>= (select a __idx__) 1)))"
          result.string
      ; check_func task result
 
