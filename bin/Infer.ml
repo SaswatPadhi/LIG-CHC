@@ -16,9 +16,12 @@ let config_flags =
     and max_expressiveness_level  = flag "max-expressiveness-level"
                                          (optional_with_default Solver.Config.default._PIE._Synthesizer.max_expressiveness_level int)
                                          ~doc:"INTEGER maximum expressiveness level {1 = Equalities ... 6 = Peano Arithmetic}"
-    and max_steps_on_restart      = flag "max-steps-on-restart"
-                                         (optional_with_default Solver.Config.default.max_steps_on_restart int)
-                                         ~doc:"INTEGER number of new states to collect after a restart"
+    and max_counterexamples       = flag "max-counterexamples"
+                                         (optional_with_default Solver.Config.default.max_counterexamples int)
+                                         ~doc:"INTEGER number of counterexamples to collect per violation"
+    and start_with_true           = flag "bv-to-int"
+                                         (optional_with_default Solver.Config.default.start_with_true bool)
+                                         ~doc:"BOOLEAN start with `true` as the initial candidate solution(s)"
     in {
       Solver.Config.default with
         _PIE = {
@@ -30,7 +33,8 @@ let config_flags =
         ; max_conflict_group_size
         }
     ; base_random_seed
-    ; max_steps_on_restart
+    ; max_counterexamples
+    ; start_with_true
     }
   ]
 
@@ -53,12 +57,10 @@ let command =
                        _PIE = { config._PIE with
                                 _Synthesizer = { config._PIE._Synthesizer with logic }
                               ; max_conflict_group_size = logic.sample_set_size_multiplier
-                                                        * config._PIE.max_conflict_group_size }
+                                                        * config._PIE.max_conflict_group_size
+                              }
                      }
-         in let candidates = Array.map sygus.uninterpreted_functions
-                                       ~f:(fun func -> { job = (Job.create ~args:func.args ())
-                                                       ; func ; solution = "true" })
-         in let interpretations = Solver.solve ~config ~zpath:z3_path sygus candidates
+         in let interpretations = Solver.solve ~config ~zpath:z3_path sygus
          in Out_channel.output_string
               Stdio.stdout
               (List.to_string_map interpretations ~sep:"\n" ~f:SyGuS.func_definition)

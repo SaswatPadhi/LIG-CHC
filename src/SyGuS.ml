@@ -11,9 +11,9 @@ type var = string * Type.t
 type chc = {
   args : var list ;
   body : string ;
-  head : (int * (string list)) list ;
+  head_ui_calls : (int * (string list)) list ;
   name : string ;
-  tail : (int * (string list)) list ;
+  tail_ui_calls : (int * (string list)) list ;
 }
 
 type func = {
@@ -155,8 +155,8 @@ let parse_sexps (sexps : Sexp.t list) : t =
                                 | Atom "false"
                                   -> queries := { args = List.map ~f:parse_variable_declaration vars
                                                 ; name = "_query_index__" ^ (Int.to_string !chc_idx) ^ "_"
-                                                ; head = []
-                                                ; tail = tail_data
+                                                ; head_ui_calls = []
+                                                ; tail_ui_calls = tail_data
                                                 ; body = "(not " ^ Sexp.to_string_hum tail ^ ")"
                                                 } :: !queries
                                 | Atom a
@@ -166,8 +166,8 @@ let parse_sexps (sexps : Sexp.t list) : t =
                                                      end
                                       in constraints := { args = List.map ~f:parse_variable_declaration vars
                                                         ; name = "_chc_index__" ^ (Int.to_string !chc_idx) ^ "_"
-                                                        ; head = head_data
-                                                        ; tail = tail_data
+                                                        ; head_ui_calls = head_data
+                                                        ; tail_ui_calls = tail_data
                                                         ; body = "(not (=> " ^ (Sexp.to_string_hum tail) ^ " " ^ a ^ ")"
                                                         } :: !constraints
                                 | List ((Atom a) :: ops)
@@ -177,8 +177,8 @@ let parse_sexps (sexps : Sexp.t list) : t =
                                                      end
                                       in constraints := { args = List.map ~f:parse_variable_declaration vars
                                                         ; name = "_chc_index__" ^ (Int.to_string !chc_idx) ^ "_"
-                                                        ; head = head_data
-                                                        ; tail = tail_data
+                                                        ; head_ui_calls = head_data
+                                                        ; tail_ui_calls = tail_data
                                                         ; body = "(=> " ^ (Sexp.to_string_hum tail) ^ " " ^ (Sexp.to_string_hum head) ^ ")"
                                                         } :: !constraints
                                 | _ -> raise (Parse_Exn ("Constraint not in CHC form: " ^ (Sexp.to_string_hum head)))

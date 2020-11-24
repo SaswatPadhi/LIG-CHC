@@ -5,13 +5,19 @@ open Utils
 
 let max_bound_expr_size = 1
 
+let rec uses_array_component = function
+  | Var _ | Const _ -> false
+  | ImplicitLambda (_,_,_,e) -> uses_array_component e
+  | FCall (c, es) -> String.is_prefix c.name ~prefix:"array"
+                  || (List.exists es ~f:uses_array_component)
+
 let shrink =
   List.dedup_and_stable_sort ~which_to_keep:`First
                              ~compare:(fun (k1,_) (k2,_) -> Value.compare k1 k2)
 
 let equality = [
   {
-    (MakeComponent.binary ~symbol:"=" "equal") with
+    (MakeComponent.binary ~symbol:"=" "array-equal") with
     codomain = Type.BOOL;
     domain = Type.[ARRAY (TVAR 1, TVAR 2); ARRAY (TVAR 1, TVAR 2)];
     check_arg_ASTs = (function
@@ -32,12 +38,12 @@ let equality = [
 
 let reads = equality @ [
   {
-    (MakeComponent.binary "select") with
+    (MakeComponent.binary ~symbol:"select" "array-select") with
     codomain = Type.TVAR 2;
     domain = Type.[ARRAY (TVAR 1, TVAR 2); TVAR 1];
     check_arg_ASTs = (function
                          | [FCall (comp, [a ; k1 ; _]) ; k2]
-                           when String.equal comp.name "store"
+                           when String.equal comp.name "array-store"
                            -> k1 =/= k2
                          | _ -> true);
     evaluate = Value.(fun [@warning "-8"]
@@ -51,7 +57,7 @@ let reads = equality @ [
 let writes = reads @ [
   {
     MakeComponent.base with
-    name = "store";
+    name = "array-store";
     codomain = Type.(ARRAY (TVAR 1, TVAR 2));
     domain = Type.[ARRAY (TVAR 1, TVAR 2); TVAR 1; TVAR 2];
     evaluate = Value.(fun [@warning "-8"]
@@ -64,7 +70,7 @@ let writes = reads @ [
 let bounded_int_quantifiers = writes @ [
   {
     MakeComponent.base with
-    name = "bounded-int-forall";
+    name = "array-bounded-int-forall";
     codomain = Type.(BOOL);
     domain = Type.[INT; INT; BOOL];
     check_arg_ASTs = (function
@@ -74,7 +80,7 @@ let bounded_int_quantifiers = writes @ [
                          | [ lb_expr ; ub_expr ; p ]
                            -> (size lb_expr) <= max_bound_expr_size 
                            && (size lb_expr) <= max_bound_expr_size
-                           && (not (is_constant p))
+                           && uses_array_component p
                          | _ -> false);
     callable_args = [ (2, (ghost_variable_name, INT, BOOL)) ];
     evaluate = Value.(fun [@warning "-8"]
