@@ -61,11 +61,14 @@ let negate (chc : SyGuS.chc) (cex : chc_counterex) : string list =
        else [ negate_states chc.tail_ui_calls cex.tail_states ]
 
 let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidates : candidate array) : unit =
-  ZProc.create_scope z3 ~db:(Array.to_rev_list_map candidates
-                                                   ~f:(fun c -> SyGuS.func_forall_definition { c.func with body = c.solution })) ;
+  let cands = List.mapi (Array.to_rev_list_map candidates
+            ~f:(fun c -> { c.func with body = c.solution }))  ~f:(fun i c -> (i, c) ) in
   List.iter (sygus.queries @ sygus.constraints)
-            ~f:(fun chc -> ZProc.create_scope z3
-                         ; if check_chc ~scoped:false ~z3 chc
+            ~f:(fun chc -> 
+            List.iter cands
+              ~f:(fun cand ->
+                  ZProc.create_scope z3
+                         ; if check_chc ~scoped:false ~z3 (replace_inv chc cand)
                            then ZProc.close_scope z3
                            else begin
                              Log.debug (lazy ("CHC " ^ chc.name ^ " is violated! Collecting " ^ (Int.to_string config.max_counterexamples) ^ " counterexamples ...")) ;
@@ -82,8 +85,7 @@ let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidat
                                   -> ZProc.close_scope z3
                                    ; ZProc.close_scope z3
                                    ; raise (CounterExamples counterexamples)
-                           end) ;
-  ZProc.close_scope z3
+                           end)) 
 
 let rec solve_impl ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidates : candidate array) : SyGuS.func list =
   try Log.debug (lazy ("Checking validity of CHCs with current candidate interpretations ..."))

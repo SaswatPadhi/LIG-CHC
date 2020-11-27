@@ -76,6 +76,47 @@ let func_forall_definition (f : func) : string =
   "(assert (forall (" ^ (List.to_string_map f.args ~sep:" " ~f:(fun (v, t) -> "(" ^ v ^ " " ^ (Type.to_string t) ^ ")"))
   ^ ") (= (" ^ f.name ^ " " ^ (List.to_string_map f.args ~sep:" " ~f:fst) ^ ") " ^ f.body ^ ")))"
 
+(* replace s1 with s2 in str *)
+let replace_substr (s1: string) (s2: string) (str: string) : string =
+  Str.global_replace (Str.regexp s1) s2 str
+
+(* invariant: args and replace contain the same number of items *)
+let rec subst_inv (args: string list) (replace: var list) (body: string) : string = 
+  match args with
+    | h :: t -> (match replace with 
+        | (repl, ty) :: ta -> subst_inv t ta (replace_substr repl h body)
+        | [] -> raise (Parse_Exn ("Not enough arguments to substitute invariant.")))
+    | [] -> body
+
+let replace_inv_args (args: string list) (cand: Solver.candidate) : string = 
+  let inv_args = cand.func.args in 
+  subst_inv args inv_args cand.func.body 
+
+let replace_inv (c : chc) (cand : int * Solver.candidate) : chc = 
+  let i, inv = cand in
+  let inv_name = inv.func.name in 
+  let inv_body = inv.func.body in
+  let head_call = 
+    try List.nth c.head_ui_calls i
+    with Failure _ -> None in 
+  let head_args = match head_call with 
+    | Some(ind, args) -> args
+    | _ -> [] in
+  let trans_inv_for_head = replace_inv_args head_args inv in
+  let to_transform = "(" ^ inv_name ^ " " ^ String.concat ~sep:" " head_args ^ ")" in
+  (* only transform head if there's the matching invariant *)
+  let transformed_head_body = if is_some head_call then replace_substr to_transform trans_inv_for_head c.body else c.body in
+  let tail_call = 
+    try List.nth c.head_ui_calls i
+    with Failure _ -> None in 
+  let tail_args = match tail_call with 
+    | Some(ind, args) -> args
+    | _ -> [] in
+  let trans_inv_for_tail = replace_inv_args tail_args inv in
+  let to_transform = "(" ^ inv_name ^ " " ^ String.concat ~sep:" " tail_args ^ ")" in
+  let transformed_tail_body = if is_some tail_call then replace_substr to_transform trans_inv_for_head transformed_head_body else transformed_head_body in
+  {c with body = transformed_tail_body}
+
 let chc_func_definition (c : chc) : string =
   "(define-fun " ^ c.name ^ " ("
   ^ (List.to_string_map
