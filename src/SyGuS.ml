@@ -92,25 +92,29 @@ let replace_inv_args (args: string list) (inv_args: var list) (inv_body: string)
   subst_inv args inv_args inv_body
 
 let replace_inv (c : chc) (i : int) (inv_name: string) (inv_body: string) (inv_args: var list) : chc = 
+  Log.debug (lazy ("Transforming chc with body: " ^ c.body ^ " to " ^ inv_body ));
   let head_call = 
     try List.nth c.head_ui_calls i
     with Failure _ -> None in 
   let head_args = match head_call with 
     | Some(ind, args) -> args
     | _ -> [] in
-  let trans_inv_for_head = (replace_inv_args head_args inv_args inv_body) in
+  let trans_inv_for_head = if String.equal inv_body "true" || String.equal inv_body "false" then inv_body else (replace_inv_args head_args inv_args inv_body) in
   let to_transform = "(" ^ inv_name ^ " " ^ String.concat ~sep:" " head_args ^ ")" in
+  Log.debug (lazy ("To transform: " ^ to_transform ^" with list " ^  String.concat ~sep:" " head_args)) ;
   (* only transform head if there's the matching invariant *)
   let transformed_head_body = if is_some head_call then replace_substr to_transform trans_inv_for_head c.body else c.body in
   let tail_call = 
-    try List.nth c.head_ui_calls i
+    try List.nth c.tail_ui_calls i
     with Failure _ -> None in 
   let tail_args = match tail_call with 
     | Some(ind, args) -> args
     | _ -> [] in
-  let trans_inv_for_tail = (replace_inv_args tail_args inv_args inv_body) in
+  let trans_inv_for_tail = if String.equal inv_body "true" || String.equal inv_body "false" then inv_body else (replace_inv_args tail_args inv_args inv_body) in
   let to_transform = "(" ^ inv_name ^ " " ^ String.concat ~sep:" " tail_args ^ ")" in
+  Log.debug (lazy ("To transform: " ^ to_transform ^ " with list " ^  String.concat ~sep:" " tail_args)) ;
   let transformed_tail_body = if is_some tail_call then replace_substr to_transform trans_inv_for_tail transformed_head_body else transformed_head_body in
+  Log.debug (lazy ("Transformed body: " ^ transformed_tail_body)) ;
   {c with body = transformed_tail_body}
 
 let chc_func_definition (c : chc) : string =

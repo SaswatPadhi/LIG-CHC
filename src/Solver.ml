@@ -77,7 +77,9 @@ let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidat
   let cands = List.map (Array.to_rev_list_map candidates
             ~f:(fun c -> { c.func with body = c.solution }))  ~f:(fun c -> 
                 (* find the index of the corresponding uninterpreted function to replace correct invariant later *)
-                let ui_index = find uifuncs c.name c.args 0 in (ui_index, c) 
+                let ui_index = find uifuncs c.name c.args 0 in 
+                Log.debug (lazy ("Invariant index " ^ string_of_int ui_index)) ;
+                (ui_index, c) 
             ) in
   List.iter (sygus.queries @ sygus.constraints)
             ~f:(fun chc -> 
@@ -99,7 +101,6 @@ let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidat
                                   in raise (CounterExamples counterexamples)
                              with CounterExamples counterexamples
                                   -> ZProc.close_scope z3
-                                   ; ZProc.close_scope z3
                                    ; raise (CounterExamples counterexamples)
                            end)) 
 
