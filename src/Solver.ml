@@ -60,15 +60,31 @@ let negate (chc : SyGuS.chc) (cex : chc_counterex) : string list =
        then [ negate_states chc.head_ui_calls cex.head_states ]
        else [ negate_states chc.tail_ui_calls cex.tail_states ]
 
+
+let contains_all (list1: var list) (list2: var list): bool =
+  if List.length list1 <> List.length list2 then false 
+  else List.fold2_exn (fun a (name1, type1) (name2, type2) -> a && (String.equal name1 name2) && (Type.equal type1 type2)) true list1 list2 
+
+let is_equal (list1: var list) (list2: var list): bool = contains_all list1 list2 && contains_all list2 list1
+
+let rec find (uifuncs: SyGuS.func array) (inv_name: string) (inv_args: var list) n =
+  let curr = uifuncs.(n) in 
+  if (String.equal curr.name inv_name) && (is_equal curr.args inv_args) then n 
+  else find uifuncs inv_name inv_args (n+1)
+
 let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidates : candidate array) : unit =
-  let cands = List.mapi (Array.to_rev_list_map candidates
-            ~f:(fun c -> { c.func with body = c.solution }))  ~f:(fun i c -> (i, c) ) in
+  let uifuncs = sygus.uninterpreted_functions in
+  let cands = List.map (Array.to_rev_list_map candidates
+            ~f:(fun c -> { c.func with body = c.solution }))  ~f:(fun c -> 
+                (* find the index of the corresponding uninterpreted function to replace correct invariant later *)
+                let ui_index = find uifuncs c.func.name c.func.args 0 in (ui_index, c) 
+            ) in
   List.iter (sygus.queries @ sygus.constraints)
             ~f:(fun chc -> 
             List.iter cands
-              ~f:(fun cand ->
+              ~f:(fun (index, cand) ->
                   ZProc.create_scope z3
-                         ; if check_chc ~scoped:false ~z3 (replace_inv chc cand)
+                         ; if check_chc ~scoped:false ~z3 (SyGus.replace_inv chc index cand.func.name cand.func.body cand.func.args)
                            then ZProc.close_scope z3
                            else begin
                              Log.debug (lazy ("CHC " ^ chc.name ^ " is violated! Collecting " ^ (Int.to_string config.max_counterexamples) ^ " counterexamples ...")) ;

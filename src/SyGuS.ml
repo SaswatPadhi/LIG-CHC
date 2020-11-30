@@ -88,21 +88,17 @@ let rec subst_inv (args: string list) (replace: var list) (body: string) : strin
         | [] -> raise (Parse_Exn ("Not enough arguments to substitute invariant.")))
     | [] -> body
 
-let replace_inv_args (args: string list) (cand: Solver.candidate) : string = 
-  let inv_args = cand.func.args in 
-  subst_inv args inv_args cand.func.body 
+let replace_inv_args (args: string list) (inv_args: var list) (inv_body: string) : string = 
+  subst_inv args inv_args inv_body
 
-let replace_inv (c : chc) (cand : int * Solver.candidate) : chc = 
-  let i, inv = cand in
-  let inv_name = inv.func.name in 
-  let inv_body = inv.func.body in
+let replace_inv (c : chc) (i : int) (inv_name: string) (inv_body: string) (inv_args: var list) : chc = 
   let head_call = 
     try List.nth c.head_ui_calls i
     with Failure _ -> None in 
   let head_args = match head_call with 
     | Some(ind, args) -> args
     | _ -> [] in
-  let trans_inv_for_head = replace_inv_args head_args inv in
+  let trans_inv_for_head = (replace_inv_args head_args inv_args inv_body) in
   let to_transform = "(" ^ inv_name ^ " " ^ String.concat ~sep:" " head_args ^ ")" in
   (* only transform head if there's the matching invariant *)
   let transformed_head_body = if is_some head_call then replace_substr to_transform trans_inv_for_head c.body else c.body in
@@ -112,9 +108,9 @@ let replace_inv (c : chc) (cand : int * Solver.candidate) : chc =
   let tail_args = match tail_call with 
     | Some(ind, args) -> args
     | _ -> [] in
-  let trans_inv_for_tail = replace_inv_args tail_args inv in
+  let trans_inv_for_tail = (replace_inv_args tail_args inv_args inv_body) in
   let to_transform = "(" ^ inv_name ^ " " ^ String.concat ~sep:" " tail_args ^ ")" in
-  let transformed_tail_body = if is_some tail_call then replace_substr to_transform trans_inv_for_head transformed_head_body else transformed_head_body in
+  let transformed_tail_body = if is_some tail_call then replace_substr to_transform trans_inv_for_tail transformed_head_body else transformed_head_body in
   {c with body = transformed_tail_body}
 
 let chc_func_definition (c : chc) : string =
