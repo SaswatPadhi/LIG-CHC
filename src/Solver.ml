@@ -63,7 +63,7 @@ let negate (chc : SyGuS.chc) (cex : chc_counterex) : string list =
 
 let contains_all (list1: var list) (list2: var list): bool =
   if List.length list1 <> List.length list2 then false 
-  else List.fold2_exn (fun a (name1, type1) (name2, type2) -> a && (String.equal name1 name2) && (Type.equal type1 type2)) true list1 list2 
+  else List.fold2_exn ~init:true ~f:(fun a (name1, type1) (name2, type2) -> a && (String.equal name1 name2) && (Type.equal type1 type2)) list1 list2 
 
 let is_equal (list1: var list) (list2: var list): bool = contains_all list1 list2 && contains_all list2 list1
 
@@ -77,14 +77,14 @@ let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidat
   let cands = List.map (Array.to_rev_list_map candidates
             ~f:(fun c -> { c.func with body = c.solution }))  ~f:(fun c -> 
                 (* find the index of the corresponding uninterpreted function to replace correct invariant later *)
-                let ui_index = find uifuncs c.func.name c.func.args 0 in (ui_index, c) 
+                let ui_index = find uifuncs c.name c.args 0 in (ui_index, c) 
             ) in
   List.iter (sygus.queries @ sygus.constraints)
             ~f:(fun chc -> 
             List.iter cands
               ~f:(fun (index, cand) ->
                   ZProc.create_scope z3
-                         ; if check_chc ~scoped:false ~z3 (SyGus.replace_inv chc index cand.func.name cand.func.body cand.func.args)
+                         ; if check_chc ~scoped:false ~z3 (SyGuS.replace_inv chc index cand.name cand.body cand.args)
                            then ZProc.close_scope z3
                            else begin
                              Log.debug (lazy ("CHC " ^ chc.name ^ " is violated! Collecting " ^ (Int.to_string config.max_counterexamples) ^ " counterexamples ...")) ;
