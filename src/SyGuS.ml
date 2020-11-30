@@ -72,16 +72,6 @@ let func_definition (f : func) : string =
        f.args ~sep:" " ~f:(fun (v, t) -> "(" ^ v ^ " " ^ (Type.to_string t) ^ ")"))
   ^ ") " ^ (Type.to_string f.return) ^ " " ^ f.body ^ ")"
 
-let func_forall_definition (f : func) : string =
-  "(assert (forall (" ^ (List.to_string_map f.args ~sep:" " ~f:(fun (v, t) -> "(" ^ v ^ " " ^ (Type.to_string t) ^ ")"))
-  ^ ") (= (" ^ f.name ^ " " ^ (List.to_string_map f.args ~sep:" " ~f:fst) ^ ") " ^ f.body ^ ")))"
-
-let chc_func_definition (c : chc) : string =
-  "(define-fun " ^ c.name ^ " ("
-  ^ (List.to_string_map
-       c.args ~sep:" " ~f:(fun (v, t) -> "(" ^ v ^ " " ^ (Type.to_string t) ^ ")"))
-  ^ ") Bool " ^ c.body ^ ")"
-
 let parse_sexps (sexps : Sexp.t list) : t =
   let chc_idx = ref 0 in
   let logic : string ref = ref "" in
@@ -220,9 +210,7 @@ let read_from (filename : string) : t =
 let setup_z3 ?(user_features = []) (s : t) (z3 : ZProc.t) : unit =
   ignore (ZProc.run_queries z3 [] ~scoped:false ~db:((
     ("(set-logic " ^ (Logic.of_string s.logic).z3_name ^ ")")
-    :: (Array.to_rev_list_map ~f:func_declaration s.uninterpreted_functions)
-     @ (List.map ~f:func_definition s.defined_functions)
-     @ (List.map ~f:chc_func_definition (s.queries @ s.constraints))
+    :: (List.map ~f:func_definition s.defined_functions)
      @ user_features)))
 
 let translate_smtlib_expr (expr : string) : string =

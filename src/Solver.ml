@@ -62,7 +62,7 @@ let negate (chc : SyGuS.chc) (cex : chc_counterex) : string list =
 
 let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidates : candidate array) : unit =
   ZProc.create_scope z3 ~db:(Array.to_rev_list_map candidates
-                                                   ~f:(fun c -> SyGuS.func_forall_definition { c.func with body = c.solution })) ;
+                                                   ~f:(fun c -> SyGuS.func_definition { c.func with body = c.solution })) ;
   List.iter (sygus.queries @ sygus.constraints)
             ~f:(fun chc -> ZProc.create_scope z3
                          ; if check_chc ~scoped:false ~z3 chc
