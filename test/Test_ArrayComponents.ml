@@ -3,11 +3,11 @@ open Base
 open LoopInvGen
 
 let equal_eval = (List.find_exn ArrayComponents.equality
-                                ~f:(fun comp -> String.equal comp.name "equal")).evaluate
+                                ~f:(fun comp -> String.equal comp.name "array-equal")).evaluate
 let select_eval = (List.find_exn ArrayComponents.reads
-                                 ~f:(fun comp -> String.equal comp.name "select")).evaluate
+                                 ~f:(fun comp -> String.equal comp.name "array-select")).evaluate
 let store_eval = (List.find_exn ArrayComponents.writes
-                                ~f:(fun comp -> String.equal comp.name "store")).evaluate
+                                ~f:(fun comp -> String.equal comp.name "array-store")).evaluate
 
 let select () =
   let arr = Value.Array (Type.INT, Type.INT, [(Value.Int 3, Value.Int 10)], Value.Int 1) in

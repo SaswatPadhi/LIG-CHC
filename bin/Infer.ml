@@ -19,7 +19,7 @@ let config_flags =
     and max_counterexamples       = flag "max-counterexamples"
                                          (optional_with_default Solver.Config.default.max_counterexamples int)
                                          ~doc:"INTEGER number of counterexamples to collect per violation"
-    and start_with_true           = flag "bv-to-int"
+    and start_with_true           = flag "start-with-true"
                                          (optional_with_default Solver.Config.default.start_with_true bool)
                                          ~doc:"BOOLEAN start with `true` as the initial candidate solution(s)"
     in {

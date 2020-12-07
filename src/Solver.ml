@@ -10,6 +10,7 @@ module Config = struct
 
     base_random_seed : string ;
     describe : (('a Job.feature Job.with_desc) CNF.t option) -> Job.desc ;
+    max_array_template_size : int ;
     max_counterexamples : int ;
     start_with_true : bool ;
     user_features: (string * string) list ;
@@ -20,6 +21,7 @@ module Config = struct
 
     base_random_seed = "LoopInvGen" ;
     describe = PIE.cnf_opt_to_desc ;
+    max_array_template_size = 8 ;
     max_counterexamples = 1 ;
     start_with_true = true ;
     user_features = [] ;
@@ -60,6 +62,33 @@ let negate (chc : SyGuS.chc) (cex : chc_counterex) : string list =
        then [ negate_states chc.head_ui_calls cex.head_states ]
        else [ negate_states chc.tail_ui_calls cex.tail_states ]
 
+
+let more_counterexamples_exist ?(config = Config.default) ~(z3 : ZProc.t) ~(db : string list) (chc : chc) : bool =
+  let array_variables = List.filter chc.args ~f:(function (_, Type.ARRAY _) -> true | _ -> false)
+   in if config.max_array_template_size < 1 || List.is_empty array_variables
+      then ZProc.check_sat z3 ~db ~scoped:false
+      else try
+             List.(iter (range ~stride:1 ~start:`inclusive ~stop:`inclusive 1 config.max_array_template_size)
+                        ~f:(fun template_size -> Log.debug (lazy ("Restricting arrays to template size " ^ (Int.to_string template_size))) ;
+                                                 let template_size_range = range ~stride:1 ~start:`inclusive ~stop:`inclusive 1 template_size in
+                                                 let template_db = (
+                                                       concat_map array_variables
+                                                                  ~f:(fun [@warning "-8"] (name, Type.ARRAY (k_type, v_type))
+                                                                      -> ("(declare-const _" ^ name ^ "_template_default_var_ " ^ (Type.to_string v_type) ^ ")")
+                                                                      :: (concat_map template_size_range
+                                                                                     ~f:(fun i -> [ ("(declare-const _" ^ name ^ "_template_k_var_" ^ (Int.to_string i) ^ "_ " ^ (Type.to_string v_type) ^ ")")
+                                                                                                  ; ("(declare-const _" ^ name ^ "_template_v_var_" ^ (Int.to_string i) ^ "_ " ^ (Type.to_string v_type) ^ ")") ])))
+                                                 ) in let template_constraints = map array_variables
+                                                                                  ~f:(fun (v,t) -> "(assert (= " ^ v ^ " "
+                                                                                                 ^ (fold template_size_range ~init:("((as const " ^ (Type.to_string t) ^ ") _" ^ v ^ "_template_default_var_)")
+                                                                                                                       ~f:(fun acc i -> "(store " ^ acc ^ " _" ^ v ^ "_template_k_var_" ^ (Int.to_string i) ^ "_ _" ^ v ^ "_template_v_var_" ^ (Int.to_string i) ^ "_)"))
+                                                                                                 ^ "))")
+                                                       in if ZProc.check_sat z3 ~db:(template_db @ template_constraints @ db) ~scoped:false
+                                                          then raise Exit
+                                                          else ZProc.close_scope z3)) ;
+             ZProc.create_scope z3 ; false
+           with _ -> true
+
 let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidates : candidate array) : unit =
   ZProc.create_scope z3 ~db:(Array.to_rev_list_map candidates
                                                    ~f:(fun c -> SyGuS.func_definition { c.func with body = c.solution })) ;
@@ -71,11 +100,11 @@ let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidat
                              Log.debug (lazy ("CHC " ^ chc.name ^ " is violated! Collecting " ^ (Int.to_string config.max_counterexamples) ^ " counterexamples ...")) ;
                              try let counterexamples = List.(
                                    fold (range 0 config.max_counterexamples) ~init:[]
-                                        ~f:(fun acc i -> if not (ZProc.check_sat z3 ~db:(if i = 0 then [] else negate chc (hd_exn acc)) ~scoped:false)
+                                        ~f:(fun acc i -> if not (more_counterexamples_exist ~config ~z3 ~db:(if i = 0 then [] else negate chc (hd_exn acc)) chc)
                                                          then raise (CounterExamples acc)
                                                          else {
-                                                           head_states = List.map chc.head_ui_calls ~f:(fun (i,terms) -> (i, List.map terms ~f:(ZProc.evaluate z3))) ;
-                                                           tail_states = List.map chc.tail_ui_calls ~f:(fun (i,terms) -> (i, List.map terms ~f:(ZProc.evaluate z3)))
+                                                           head_states = List.(map chc.head_ui_calls ~f:(fun (i,terms) -> (i, map terms ~f:(ZProc.evaluate z3)))) ;
+                                                           tail_states = List.(map chc.tail_ui_calls ~f:(fun (i,terms) -> (i, map terms ~f:(ZProc.evaluate z3))))
                                                          } :: acc))
                                   in raise (CounterExamples counterexamples)
                              with CounterExamples counterexamples

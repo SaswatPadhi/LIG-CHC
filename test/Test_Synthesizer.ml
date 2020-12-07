@@ -212,7 +212,7 @@ let forall_test () =
     | _ -> Bool false
    in
   let check elms def lb jub =
-    lb <= jub &&
+    lb > jub ||
     List.(for_all (range ~stride:1 ~start:`inclusive ~stop:`inclusive lb jub)
                   ~f:(fun k -> Value.(equal (pred elms def (Int k)) (Bool true))))
    in

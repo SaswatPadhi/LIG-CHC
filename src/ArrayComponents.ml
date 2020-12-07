@@ -54,20 +54,7 @@ let reads = equality @ [
   }
 ]
 
-let writes = reads @ [
-  {
-    MakeComponent.base with
-    name = "array-store";
-    codomain = Type.(ARRAY (TVAR 1, TVAR 2));
-    domain = Type.[ARRAY (TVAR 1, TVAR 2); TVAR 1; TVAR 2];
-    evaluate = Value.(fun [@warning "-8"]
-                      [Array (key_type, val_type, elems, default_val) ; key ; value]
-                      -> Array (key_type, val_type, (key, value)::elems, default_val));
-    to_string = (fun [@warning "-8"] [a ; b ; c] -> "(store " ^ a ^ " " ^ b ^ " " ^ c ^ ")")
-  } ;
-]
-
-let bounded_int_quantifiers = writes @ [
+let bounded_int_quantifiers = reads @ [
   {
     MakeComponent.base with
     name = "array-bounded-int-forall";
@@ -93,4 +80,18 @@ let bounded_int_quantifiers = writes @ [
   }
 ]
 
-let levels = [| equality ; reads ; writes ; bounded_int_quantifiers |]
+let writes = bounded_int_quantifiers @ [
+  {
+    MakeComponent.base with
+    name = "array-store";
+    codomain = Type.(ARRAY (TVAR 1, TVAR 2));
+    domain = Type.[ARRAY (TVAR 1, TVAR 2); TVAR 1; TVAR 2];
+    evaluate = Value.(fun [@warning "-8"]
+                      [Array (key_type, val_type, elems, default_val) ; key ; value]
+                      -> Array (key_type, val_type, (key, value)::elems, default_val));
+    to_string = (fun [@warning "-8"] [a ; b ; c] -> "(store " ^ a ^ " " ^ b ^ " " ^ c ^ ")")
+  } ;
+]
+
+let read_only_levels = [| equality ; reads ; bounded_int_quantifiers |]
+let read_write_levels = [| equality ; reads ; bounded_int_quantifiers ; writes |]

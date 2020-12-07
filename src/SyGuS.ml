@@ -144,7 +144,7 @@ let parse_sexps (sexps : Sexp.t list) : t =
                            in begin match head with
                                 | Atom "false"
                                   -> queries := { args = List.map ~f:parse_variable_declaration vars
-                                                ; name = "_query_index__" ^ (Int.to_string !chc_idx) ^ "_"
+                                                ; name = "_query__" ^ (Int.to_string !chc_idx) ^ "_"
                                                 ; head_ui_calls = []
                                                 ; tail_ui_calls = tail_data
                                                 ; body = "(not " ^ Sexp.to_string_hum tail ^ ")"
@@ -155,7 +155,7 @@ let parse_sexps (sexps : Sexp.t list) : t =
                                                        | _ -> []
                                                      end
                                       in constraints := { args = List.map ~f:parse_variable_declaration vars
-                                                        ; name = "_chc_index__" ^ (Int.to_string !chc_idx) ^ "_"
+                                                        ; name = "_constraint__" ^ (Int.to_string !chc_idx) ^ "_"
                                                         ; head_ui_calls = head_data
                                                         ; tail_ui_calls = tail_data
                                                         ; body = "(not (=> " ^ (Sexp.to_string_hum tail) ^ " " ^ a ^ ")"
@@ -166,7 +166,7 @@ let parse_sexps (sexps : Sexp.t list) : t =
                                                        | _ -> []
                                                      end
                                       in constraints := { args = List.map ~f:parse_variable_declaration vars
-                                                        ; name = "_chc_index__" ^ (Int.to_string !chc_idx) ^ "_"
+                                                        ; name = "_constraint__" ^ (Int.to_string !chc_idx) ^ "_"
                                                         ; head_ui_calls = head_data
                                                         ; tail_ui_calls = tail_data
                                                         ; body = "(=> " ^ (Sexp.to_string_hum tail) ^ " " ^ (Sexp.to_string_hum head) ^ ")"
