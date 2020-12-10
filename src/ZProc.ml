@@ -228,11 +228,12 @@ let collect_models ?(eval_term = "true")
            in close_scope z3
             ; result
 
-let build_feature (name : string) (z3 : t) (vals : Value.t list) : bool =
-  let arguments = List.to_string_map vals ~sep:" " ~f:Value.to_string in
-  let result = run_queries z3 ~db:["(assert (" ^ name ^ " " ^ arguments ^ "))"]
-                           ["(check-sat)"]
+let build_feature ~(z3 : t) (args : string list) (expr : string) (vals : Value.t list) : bool =
+  let assignments = List.to_string_map2 args vals ~sep:" " ~f:(fun a v -> "(= " ^ a ^ " " ^ (Value.to_string v) ^ ")") in
+  let result = run_queries z3 ~db:[ "(assert (and " ^ assignments ^ "))"
+                                  ; "(assert (not " ^ expr ^ "))" ]
+                                  [ "(check-sat)" ]
    in match result with
-      | ["sat"] -> true
-      | ["unsat"] -> false
-      | _ -> raise (Internal_Exn ("Failed to build feature" ^ name ^ "."))
+      | ["unsat"] -> true
+      | ["sat"] -> false
+      | _ -> raise (Internal_Exn ("Failed to build feature!"))

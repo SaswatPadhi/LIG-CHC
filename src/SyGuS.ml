@@ -24,11 +24,13 @@ type func = {
   expressible : bool ;
 }
 
+type feature = Value.t Job.feature Job.with_desc
+
 type t = {
   logic : string ;
   constants : Value.t list ;
   defined_functions : func list ;
-  uninterpreted_functions : func array ;
+  uninterpreted_functions : (func * string list) array ;
   constraints : chc list ;
   queries : chc list ;
 }
@@ -72,13 +74,23 @@ let func_definition (f : func) : string =
        f.args ~sep:" " ~f:(fun (v, t) -> "(" ^ v ^ " " ^ (Type.to_string t) ^ ")"))
   ^ ") " ^ (Type.to_string f.return) ^ " " ^ f.body ^ ")"
 
+let check_and_replace_vars bindings (expr : Sexp.t) : string option =
+  let rec helper : Sexp.t -> Sexp.t =
+    function [@warning "-8"]
+    | List (op :: l) -> List (op :: (List.map l ~f:helper))
+    | Atom a -> match List.Assoc.find bindings a ~equal:String.equal with
+                | None   -> ignore(Value.of_atomic_string a) ; Atom a
+                | Some d -> d
+   in try Some (Sexp.to_string_hum (helper expr))
+      with _ -> None
+
 let parse_sexps (sexps : Sexp.t list) : t =
   let chc_idx = ref 0 in
   let logic : string ref = ref "" in
   let consts : Value.t list ref = ref [] in
   let defined_funcs : func list ref = ref [] in
   let uninterpreted_funcs : func list ref = ref [] in
-  let constraints : chc list ref = ref [] in
+  let constraints : (chc * Sexp.t list) list ref = ref [] in
   let queries : chc list ref = ref []
    in List.iter sexps
         ~f:(function
@@ -114,7 +126,13 @@ let parse_sexps (sexps : Sexp.t list) : t =
                 -> begin match Transform.remove_lets chc_body with
                      | List [ (Atom "=>") ; tail ; head ]
                        -> consts := (extract_consts tail) @ !consts
-                        ; let tail_data =
+                        ; let conjuncts = match tail with
+                                          | List ((Atom "and") :: conjuncts) -> conjuncts
+                                          | (Atom _) as sexp -> [ sexp ]
+                                          | (List ((Atom _) :: _)) as sexp -> [ sexp ]
+                                          | _ -> raise (Parse_Exn ("Constraint not in CHC form: " ^ (Sexp.to_string_hum tail)))
+                           in
+                          let tail_data =
                               match tail with
                               | Atom a
                                 -> begin match List.findi !uninterpreted_funcs ~f:(fun _ f -> String.equal a f.name) with
@@ -154,23 +172,25 @@ let parse_sexps (sexps : Sexp.t list) : t =
                                                        | Some (i,_) -> [ (i,[]) ]
                                                        | _ -> []
                                                      end
-                                      in constraints := { args = List.map ~f:parse_variable_declaration vars
-                                                        ; name = "_constraint__" ^ (Int.to_string !chc_idx) ^ "_"
-                                                        ; head_ui_calls = head_data
-                                                        ; tail_ui_calls = tail_data
-                                                        ; body = "(not (=> " ^ (Sexp.to_string_hum tail) ^ " " ^ a ^ ")"
-                                                        } :: !constraints
+                                      in constraints := ({ args = List.map ~f:parse_variable_declaration vars
+                                                         ; name = "_constraint__" ^ (Int.to_string !chc_idx) ^ "_"
+                                                         ; head_ui_calls = head_data
+                                                         ; tail_ui_calls = tail_data
+                                                         ; body = "(not (=> " ^ (Sexp.to_string_hum tail) ^ " " ^ a ^ ")"
+                                                         }, conjuncts)
+                                                     :: !constraints
                                 | List ((Atom a) :: ops)
                                   -> let head_data = begin match List.findi !uninterpreted_funcs ~f:(fun _ f -> String.equal a f.name) with
                                                        | Some (i,_) -> [ (i,(List.map ops ~f:Sexp.to_string_hum)) ]
                                                        | _ -> []
                                                      end
-                                      in constraints := { args = List.map ~f:parse_variable_declaration vars
-                                                        ; name = "_constraint__" ^ (Int.to_string !chc_idx) ^ "_"
-                                                        ; head_ui_calls = head_data
-                                                        ; tail_ui_calls = tail_data
-                                                        ; body = "(=> " ^ (Sexp.to_string_hum tail) ^ " " ^ (Sexp.to_string_hum head) ^ ")"
-                                                        } :: !constraints
+                                      in constraints := ({ args = List.map ~f:parse_variable_declaration vars
+                                                         ; name = "_constraint__" ^ (Int.to_string !chc_idx) ^ "_"
+                                                         ; head_ui_calls = head_data
+                                                         ; tail_ui_calls = tail_data
+                                                         ; body = "(=> " ^ (Sexp.to_string_hum tail) ^ " " ^ (Sexp.to_string_hum head) ^ ")"
+                                                         }, conjuncts)
+                                                     :: !constraints
                                 | _ -> raise (Parse_Exn ("Constraint not in CHC form: " ^ (Sexp.to_string_hum head)))
                               end
                             ; chc_idx := !chc_idx + 1
@@ -181,13 +201,27 @@ let parse_sexps (sexps : Sexp.t list) : t =
     ; Log.debug (lazy ("Detected Constants: " ^ (List.to_string_map ~sep:", " ~f:Value.to_string !consts)))
     ; if String.equal !logic ""
       then (logic := "ALL" ; Log.debug (lazy ("Using default logic: ALL")))
-    ; { constants = !consts
-      ; logic = !logic
-      ; defined_functions = List.rev !defined_funcs
-      ; uninterpreted_functions = Array.of_list !uninterpreted_funcs
-      ; constraints = !constraints
-      ; queries = !queries
-      }
+    ; let uninterpreted_functions = Array.of_list_map !uninterpreted_funcs ~f:(fun f -> (f, ref []))
+       in List.iter !constraints
+                    ~f:(fun (chc, tail_conjuncts)
+                        -> if not (List.is_empty chc.tail_ui_calls) then
+                           if List.length chc.tail_ui_calls > 1 then raise (Invalid_argument "Non-linear CHC detected!")
+                           else begin
+                             let tail_ui_idx, tail_ui_args = List.hd_exn chc.tail_ui_calls in
+                             let func, features = uninterpreted_functions.(tail_ui_idx) in
+                             let tail_ui_arg_bindings = List.map2_exn tail_ui_args func.args ~f:(fun a (b,_) -> (a, (Atom b)))
+                              in List.iter tail_conjuncts
+                                           ~f:(fun conjunct -> match check_and_replace_vars tail_ui_arg_bindings conjunct with
+                                                               | None -> ()
+                                                               | Some new_feature -> uninterpreted_functions.(tail_ui_idx) <- (func, ref (new_feature :: !features)))
+                           end)
+        ; { constants = !consts
+          ; logic = !logic
+          ; defined_functions = List.rev !defined_funcs
+          ; uninterpreted_functions = Array.map uninterpreted_functions ~f:(fun (func,features) -> (func, !features))
+          ; constraints = List.map !constraints ~f:fst
+          ; queries = !queries
+          }
 
 let parse ?(bv_to_int : int = -1) (chan : Stdio.In_channel.t) : t =
   let sexps = Sexplib.Sexp.input_sexps chan in

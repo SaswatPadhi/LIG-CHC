@@ -12,7 +12,6 @@ module Config = struct
     describe : (('a Job.feature Job.with_desc) CNF.t option) -> Job.desc ;
     max_array_template_size : int ;
     max_counterexamples : int ;
-    start_with_true : bool ;
     user_features: (string * string) list ;
   }
 
@@ -23,7 +22,6 @@ module Config = struct
     describe = PIE.cnf_opt_to_desc ;
     max_array_template_size = 8 ;
     max_counterexamples = 1 ;
-    start_with_true = true ;
     user_features = [] ;
   }
 end
@@ -150,10 +148,12 @@ let rec solve_impl ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) 
            ; Int.Set.iter
                !needs_update
                ~f:(fun i -> Log.debug (lazy ("Updating interpretation of " ^ candidates.(i).func.name))
+                          ; ZProc.create_scope z3 ~db:(List.map ~f:SyGuS.var_declaration candidates.(i).func.args)
                           ; candidates.(i) <- { candidates.(i) with
                                                 solution = config.describe (fst (
-                                                             PIE.learnPreCond candidates.(i).job ~config:config._PIE ~consts:sygus.constants
-                                                           ))})
+                                                             PIE.learnPreCond ~config:config._PIE ~consts:sygus.constants candidates.(i).job
+                                                           ))}
+                          ; ZProc.close_scope z3)
            ; solve_impl ~config ~z3 sygus candidates
 
 let remove_ui_and_negate (ui : func) (query : chc) =
@@ -166,7 +166,7 @@ let remove_ui_and_negate (ui : func) (query : chc) =
                                               -> ui_call_args := call_args
                                                ; List.iter call_args
                                                            ~f:(function Atom _ -> ()
-                                                               | _ -> raise (Internal_Exn "CHC in improper format!"))
+                                                                      | _ -> raise (Internal_Exn "CHC in improper format!"))
                                                ; false
                                             | a -> true)
         in if List.is_empty solution_conjuncts
@@ -191,24 +191,21 @@ let remove_ui_and_negate (ui : func) (query : chc) =
 
 let solve ?(config = Config.default) ~(zpath : string) (sygus : SyGuS.t) : SyGuS.func list =
   let cands = Array.map sygus.uninterpreted_functions
-                        ~f:(fun func -> { job = (Job.create ~args:func.args ())
-                                        ; func
-                                        ; solution = "false"
-                                        ; weakest_solution = "true"
-                                        })
-   in (if not config.start_with_true then
-       List.iter sygus.queries
-                 ~f:(fun q -> match q.tail_ui_calls with
-                              | [] -> ()
-                              | [ (i, _) ] -> let weakest_solution = remove_ui_and_negate sygus.uninterpreted_functions.(i) q
-                                               in cands.(i) <- { cands.(i) with
-                                                                 weakest_solution
-                                                               ; solution = weakest_solution
-                                                               }
-                              | _ -> raise (Internal_Exn "Non-linear CHC detected!")))
-    ; ZProc.process
+                        ~f:(fun (func, _) -> { job = (Job.create ~args:func.args ())
+                                             ; func
+                                             ; solution = "false"
+                                             ; weakest_solution = "true"
+                                             })
+   in ZProc.process
         ~zpath
         ~random_seed:(Some (Int.to_string (Quickcheck.(random_value ~seed:(`Deterministic config.base_random_seed)
                                                                     (Generator.small_non_negative_int)))))
         (fun z3 -> SyGuS.setup_z3 sygus z3
+                 ; Array.iteri cands
+                              ~f:(fun i cand
+                                  -> cands.(i) <- {
+                                       cands.(i) with
+                                       job = (List.fold (snd sygus.uninterpreted_functions.(i))
+                                                        ~init:cands.(i).job
+                                                        ~f:(fun job e -> Job.add_feature ~job ((ZProc.build_feature ~z3 (List.map ~f:fst cand.func.args) e), e))) })
                  ; solve_impl ~config ~z3 sygus cands)
