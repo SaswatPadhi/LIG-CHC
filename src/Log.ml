@@ -44,7 +44,8 @@ type level = Trace | Debug | Error | Info
         "%s  %s  %s\n"
         Time.(to_string (now ()))
         (level_str level)
-        (Lazy.force lstr)
+        (Lazy.force lstr) ;
+      Out_channel.flush (!log_chan)
     end
 
     let trace lstr = do_log Trace lstr
@@ -54,7 +55,7 @@ type level = Trace | Debug | Error | Info
 
   let disable () = is_enabled := false
 
-  let enable ?(msg = "") ?(level = Debug) = function
+  let enable ?(msg = "") ?(level = Trace) = function
     | None -> ()
     | Some filename
       -> log_chan := Core.Out_channel.create ~append:true filename

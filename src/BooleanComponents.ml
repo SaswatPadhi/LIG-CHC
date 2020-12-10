@@ -8,7 +8,12 @@ let all = [
     codomain = Type.BOOL;
     domain = [Type.BOOL];
     check_arg_ASTs = (function
-                         | [FCall (comp, _)] when String.equal comp.name "not"
+                         | [FCall (comp, _)]
+                           when String.(equal comp.name "not" ||
+                                        equal comp.name "int-geq" ||
+                                        equal comp.name "int-leq" ||
+                                        equal comp.name "int-gt" ||
+                                        equal comp.name "int-lt")
                            -> false
                          | [ e ] -> not (is_constant e)
                          | _ -> false);

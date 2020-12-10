@@ -61,12 +61,11 @@ let bounded_int_quantifiers = reads @ [
     codomain = Type.(BOOL);
     domain = Type.[INT; INT; BOOL];
     check_arg_ASTs = (function
-                           (* TODO: The following check could be made tighter:
-                            * We should check that the last arg (the predicate)
-                            * uses the array (arg 1) *)
                          | [ lb_expr ; ub_expr ; p ]
-                           -> (size lb_expr) <= max_bound_expr_size 
-                           && (size lb_expr) <= max_bound_expr_size
+                           -> (size lb_expr) <= max_bound_expr_size
+                           && (size ub_expr) <= max_bound_expr_size
+                           && (not (uses_array_component lb_expr))
+                           && (not (uses_array_component ub_expr))
                            && uses_array_component p
                          | _ -> false);
     callable_args = [ (2, (ghost_variable_name, INT, BOOL)) ];

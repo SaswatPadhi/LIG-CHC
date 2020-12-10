@@ -91,7 +91,7 @@ let more_counterexamples_exist ?(config = Config.default) ~(z3 : ZProc.t) ~(db :
                                                                                                                        ~f:(fun acc i -> "(store " ^ acc ^ " _" ^ v ^ "_template_k_var_" ^ (Int.to_string i) ^ "_ _" ^ v ^ "_template_v_var_" ^ (Int.to_string i) ^ "_)"))
                                                                                                  ^ "))")
                                                        in ZProc.create_scope z3
-                                                        ; if not (ZProc.check_sat z3 ~db:(template_db @ template_constraints @ db) ~scoped:false)
+                                                        ; if not (ZProc.check_sat z3 ~db:(template_db @ template_constraints) ~scoped:false)
                                                           then ZProc.close_scope z3
                                                           else begin
                                                             let cex = grab_counterexample_states ~z3 chc
@@ -193,7 +193,7 @@ let solve ?(config = Config.default) ~(zpath : string) (sygus : SyGuS.t) : SyGuS
   let cands = Array.map sygus.uninterpreted_functions
                         ~f:(fun func -> { job = (Job.create ~args:func.args ())
                                         ; func
-                                        ; solution = "true"
+                                        ; solution = "false"
                                         ; weakest_solution = "true"
                                         })
    in (if not config.start_with_true then
