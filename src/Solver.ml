@@ -56,12 +56,12 @@ let negate_states expr states : string =
                                              ~f:(fun t v -> "(= " ^ t ^ " " ^ (Value.to_string v) ^ " )"))) ^
   ")))"
 
-let negate (chc : SyGuS.chc) (cex : chc_counterex) : string list =
+let negate (chc : SyGuS.chc) (cex : chc_counterex) : string =
   if List.length chc.head_ui_calls > 0 && List.length chc.tail_ui_calls > 0
-  then [ negate_states chc.head_ui_calls cex.head_states ; negate_states chc.tail_ui_calls cex.tail_states ]
+  then negate_states (chc.head_ui_calls @ chc.tail_ui_calls) (cex.head_states @ cex.tail_states)
   else if List.length chc.head_ui_calls > 0
-       then [ negate_states chc.head_ui_calls cex.head_states ]
-       else [ negate_states chc.tail_ui_calls cex.tail_states ]
+       then negate_states chc.head_ui_calls cex.head_states
+       else negate_states chc.tail_ui_calls cex.tail_states
 
 let grab_counterexample_states ~(z3 : ZProc.t) (chc : chc) : chc_counterex =
   {
@@ -70,11 +70,10 @@ let grab_counterexample_states ~(z3 : ZProc.t) (chc : chc) : chc_counterex =
   }
 
 let more_counterexamples_exist ?(config = Config.default) ~(z3 : ZProc.t) ~(db : string list) (chc : chc) : chc_counterex option =
-  let array_variables = List.filter chc.args ~f:(function (_, Type.ARRAY _) -> true | _ -> false)
+  let array_variables = List.filter chc.args ~f:(function (_, Type.ARRAY _) -> true | _ -> false) in
+  let exist_more_cexs = ZProc.check_sat z3 ~db ~scoped:false
    in if config.max_array_template_size < 1 || List.is_empty array_variables
-      then (if ZProc.check_sat z3 ~db ~scoped:false
-            then None
-            else Some (grab_counterexample_states ~z3 chc))
+      then (if exist_more_cexs then None else Some (grab_counterexample_states ~z3 chc))
       else try
              List.(iter (range ~stride:1 ~start:`inclusive ~stop:`inclusive 1 config.max_array_template_size)
                         ~f:(fun template_size -> Log.debug (lazy ("Restricting arrays to template size " ^ (Int.to_string template_size)))
@@ -113,7 +112,7 @@ let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidat
                              Log.debug (lazy ("CHC " ^ chc.name ^ " is violated! Collecting " ^ (Int.to_string config.max_counterexamples) ^ " counterexamples ...")) ;
                              try let counterexamples = List.(
                                    fold (range 0 config.max_counterexamples) ~init:[]
-                                        ~f:(fun acc i -> match more_counterexamples_exist ~config ~z3 ~db:(if i = 0 then [] else negate chc (hd_exn acc)) chc with
+                                        ~f:(fun acc i -> match more_counterexamples_exist ~config ~z3 ~db:(if i = 0 then [] else [ negate chc (hd_exn acc) ]) chc with
                                                          | None -> raise (CounterExamples acc)
                                                          | Some cex -> cex  :: acc))
                                   in raise (CounterExamples counterexamples)
