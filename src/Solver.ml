@@ -145,36 +145,36 @@ let ensure_all_chcs_valid ?(config = Config.default) ~(z3 : ZProc.t) (sygus : Sy
 let rec refine_and_satisfy_chc ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t)
                                (chc : chc) (cex_list : chc_counterex list) (candidates : candidate array) : unit =
   let needs_update = ref (Int.Set.empty)
-          in List.iter
-               cex_list
-               ~f:(fun cex -> match List.filter cex.tail_states ~f:(fun (i,ts) -> not (Job.has_pos_test ~job:candidates.(i).job ts)) with
-                              | [] -> begin match cex.head_states with
-                                        | [] -> raise NoSuchFunction
-                                        | [ (h,_) ] -> candidates.(h) <- { candidates.(h) with
-                                                                           solution = candidates.(h).weakest_solution
-                                                                         ; job = (Job.add_pos_test
-                                                                                    ~job:{ candidates.(h).job with neg_tests = [] }
-                                                                                    (snd (List.hd_exn cex.head_states)))}
-                                        | _ -> raise (Internal_Exn "Impossible case! Multiple atoms in CHC head!")
-                                      end
-                              | tail_neg_updates
-                                -> List.iter tail_neg_updates
-                                             ~f:(fun (i,ts) -> candidates.(i) <- { candidates.(i) with
-                                                                                   job = Job.add_neg_test candidates.(i).job ts }
-                                                             ; needs_update := Int.Set.add !needs_update i ))
-           ; Int.Set.iter
-               !needs_update
-               ~f:(fun i -> Log.debug (lazy ("Updating interpretation of " ^ candidates.(i).func.name))
-                          ; ZProc.create_scope z3 ~db:(List.map ~f:SyGuS.var_declaration candidates.(i).func.args)
-                          ; candidates.(i) <- { candidates.(i) with
-                                                solution = config.describe (fst (
-                                                             PIE.learnPreCond ~config:config._PIE ~consts:sygus.constants candidates.(i).job
-                                                           ))}
-                          ; ZProc.close_scope z3)
- ; Log.debug (lazy ("Checking validity of " ^ chc.name ^ " with current candidate interpretations ..."))
- ; try ensure_chc_valid ~config ~z3 chc candidates
-   with CounterExamples (chc, cex_list)
-        -> refine_and_satisfy_chc ~config ~z3 sygus chc cex_list candidates
+   in List.iter
+        cex_list
+        ~f:(fun cex -> match List.filter cex.tail_states ~f:(fun (i,ts) -> not (Job.has_pos_test ~job:candidates.(i).job ts)) with
+                      | [] -> begin match cex.head_states with
+                                | [] -> raise NoSuchFunction
+                                | [ (h,_) ] -> candidates.(h) <- { candidates.(h) with
+                                                                   solution = candidates.(h).weakest_solution
+                                                                 ; job = (Job.add_pos_test
+                                                                            ~job:{ candidates.(h).job with neg_tests = [] }
+                                                                            (snd (List.hd_exn cex.head_states))) }
+                                | _ -> raise (Internal_Exn "Impossible case! Multiple atoms in CHC head!")
+                              end
+                      | tail_neg_updates
+                        -> List.iter tail_neg_updates
+                                      ~f:(fun (i,ts) -> candidates.(i) <- { candidates.(i) with
+                                                                            job = Job.add_neg_test candidates.(i).job ts }
+                                                      ; needs_update := Int.Set.add !needs_update i ))
+    ; Int.Set.iter
+        !needs_update
+        ~f:(fun i -> Log.debug (lazy ("Updating interpretation of " ^ candidates.(i).func.name))
+                  ; ZProc.create_scope z3 ~db:(List.map ~f:SyGuS.var_declaration candidates.(i).func.args)
+                  ; candidates.(i) <- { candidates.(i) with
+                                        solution = config.describe (fst (
+                                                      PIE.learnPreCond ~config:config._PIE ~consts:sygus.constants candidates.(i).job
+                                                    ))}
+                  ; ZProc.close_scope z3)
+    ; Log.debug (lazy ("Checking validity of " ^ chc.name ^ " with current candidate interpretations ..."))
+    ; try ensure_chc_valid ~config ~z3 chc candidates
+      with CounterExamples (chc, cex_list)
+           -> refine_and_satisfy_chc ~config ~z3 sygus chc cex_list candidates
 
 let rec solve_impl ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidates : candidate array) : SyGuS.func list =
   try Log.debug (lazy ("Checking validity of CHCs with current candidate interpretations ..."))
@@ -189,7 +189,7 @@ let solve ?(config = Config.default) ~(zpath : string) (sygus : SyGuS.t) : SyGuS
   let cands = Array.map sygus.uninterpreted_functions
                         ~f:(fun (func, _) -> { job = (Job.create ~args:func.args ())
                                              ; func
-                                             ; solution = "false"
+                                             ; solution = "true"
                                              ; weakest_solution = "true"
                                              })
    in ZProc.process
@@ -203,5 +203,6 @@ let solve ?(config = Config.default) ~(zpath : string) (sygus : SyGuS.t) : SyGuS
                                        cands.(i) with
                                        job = (List.fold (snd sygus.uninterpreted_functions.(i))
                                                         ~init:cands.(i).job
-                                                        ~f:(fun job e -> Job.add_feature ~job ((ZProc.build_feature ~z3 (List.map ~f:fst cand.func.args) e), e))) })
+                                                        ~f:(fun job e -> Log.debug (lazy ("Extracted feature during preprocessing: " ^ e))
+                                                                       ; Job.add_feature ~job ((ZProc.build_feature ~z3 (List.map ~f:fst cand.func.args) e), e))) })
                  ; solve_impl ~config ~z3 sygus cands)
