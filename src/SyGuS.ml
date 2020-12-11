@@ -74,10 +74,11 @@ let func_definition (f : func) : string =
        f.args ~sep:" " ~f:(fun (v, t) -> "(" ^ v ^ " " ^ (Type.to_string t) ^ ")"))
   ^ ") " ^ (Type.to_string f.return) ^ " " ^ f.body ^ ")"
 
-let check_and_replace_vars bindings (expr : Sexp.t) : string option =
+let check_and_replace_vars uif_names bindings (expr : Sexp.t) : string option =
   let rec helper : Sexp.t -> Sexp.t =
     function [@warning "-8"]
-    | List (op :: l) -> List (op :: (List.map l ~f:helper))
+    | List (op :: l) -> if Array.mem uif_names op ~equal:Sexp.equal then raise Exit else
+                        List (op :: (List.map l ~f:helper))
     | Atom a -> match List.Assoc.find bindings a ~equal:String.equal with
                 | None   -> ignore(Value.of_atomic_string a) ; Atom a
                 | Some d -> d
@@ -211,7 +212,7 @@ let parse_sexps (sexps : Sexp.t list) : t =
                              let func, features = uninterpreted_functions.(tail_ui_idx) in
                              let tail_ui_arg_bindings = List.map2_exn tail_ui_args func.args ~f:(fun a (b,_) -> (a, (Atom b)))
                               in List.iter tail_conjuncts
-                                           ~f:(fun conjunct -> match check_and_replace_vars tail_ui_arg_bindings conjunct with
+                                           ~f:(fun conjunct -> match check_and_replace_vars (Array.map uninterpreted_functions ~f:(fun uif -> Atom (fst uif).name)) tail_ui_arg_bindings conjunct with
                                                                | None -> ()
                                                                | Some new_feature -> uninterpreted_functions.(tail_ui_idx) <- (func, ref (new_feature :: !features)))
                            end)

@@ -39,7 +39,7 @@ type chc_counterex = {
 }
 
 exception CounterExample of chc_counterex
-exception CounterExamples of chc_counterex list
+exception CounterExamples of chc * (chc_counterex list)
 
 let check_chc ?(scoped = true) ~(z3 : ZProc.t) (c : SyGuS.chc) : bool =
   let db = List.fold c.args ~init:[ "(assert (not " ^ c.body ^ "))" ]
@@ -99,7 +99,28 @@ let more_counterexamples_exist ?(config = Config.default) ~(z3 : ZProc.t) ~(db :
              None
            with CounterExample cex -> Some cex
 
-let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidates : candidate array) : unit =
+let ensure_chc_valid ?(config = Config.default) ~(z3 : ZProc.t) (chc : chc) (candidates : candidate array) : unit =
+  ZProc.create_scope z3 ~db:(Array.to_rev_list_map candidates
+                                                   ~f:(fun c -> SyGuS.func_definition { c.func with body = c.solution })) ;
+  ZProc.create_scope z3 ;
+  if check_chc ~scoped:false ~z3 chc
+  then ZProc.close_scope z3
+  else begin
+    Log.debug (lazy ("CHC " ^ chc.name ^ " is violated! Collecting " ^ (Int.to_string config.max_counterexamples) ^ " counterexamples ...")) ;
+    try let counterexamples = List.(
+          fold (range 0 config.max_counterexamples) ~init:[]
+              ~f:(fun acc i -> match more_counterexamples_exist ~config ~z3 ~db:(if i = 0 then [] else [ negate chc (hd_exn acc) ]) chc with
+                                | None -> raise (CounterExamples (chc, acc))
+                                | Some cex -> cex  :: acc))
+        in raise (CounterExamples (chc, counterexamples))
+    with CounterExamples (chc, counterexamples)
+        -> ZProc.close_scope z3
+          ; ZProc.close_scope z3
+          ; raise (CounterExamples (chc, counterexamples))
+  end ;
+  ZProc.close_scope z3
+
+let ensure_all_chcs_valid ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidates : candidate array) : unit =
   ZProc.create_scope z3 ~db:(Array.to_rev_list_map candidates
                                                    ~f:(fun c -> SyGuS.func_definition { c.func with body = c.solution })) ;
   List.iter (sygus.queries @ sygus.constraints)
@@ -111,23 +132,19 @@ let check ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidat
                              try let counterexamples = List.(
                                    fold (range 0 config.max_counterexamples) ~init:[]
                                         ~f:(fun acc i -> match more_counterexamples_exist ~config ~z3 ~db:(if i = 0 then [] else [ negate chc (hd_exn acc) ]) chc with
-                                                         | None -> raise (CounterExamples acc)
+                                                         | None -> raise (CounterExamples (chc, acc))
                                                          | Some cex -> cex  :: acc))
-                                  in raise (CounterExamples counterexamples)
-                             with CounterExamples counterexamples
+                                  in raise (CounterExamples (chc, counterexamples))
+                             with CounterExamples (chc, counterexamples)
                                   -> ZProc.close_scope z3
                                    ; ZProc.close_scope z3
-                                   ; raise (CounterExamples counterexamples)
+                                   ; raise (CounterExamples (chc, counterexamples))
                            end) ;
   ZProc.close_scope z3
 
-let rec solve_impl ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidates : candidate array) : SyGuS.func list =
-  try Log.debug (lazy ("Checking validity of CHCs with current candidate interpretations ..."))
-    ; check ~config ~z3 sygus candidates
-    ; Array.to_rev_list_map candidates ~f:(fun c -> { c.func with body = c.solution })
-  with
-    | CounterExamples cex_list
-      -> let needs_update = ref (Int.Set.empty)
+let rec refine_and_satisfy_chc ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t)
+                               (chc : chc) (cex_list : chc_counterex list) (candidates : candidate array) : unit =
+  let needs_update = ref (Int.Set.empty)
           in List.iter
                cex_list
                ~f:(fun cex -> match List.filter cex.tail_states ~f:(fun (i,ts) -> not (Job.has_pos_test ~job:candidates.(i).job ts)) with
@@ -154,40 +171,19 @@ let rec solve_impl ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) 
                                                              PIE.learnPreCond ~config:config._PIE ~consts:sygus.constants candidates.(i).job
                                                            ))}
                           ; ZProc.close_scope z3)
-           ; solve_impl ~config ~z3 sygus candidates
+ ; Log.debug (lazy ("Checking validity of " ^ chc.name ^ " with current candidate interpretations ..."))
+ ; try ensure_chc_valid ~config ~z3 chc candidates
+   with CounterExamples (chc, cex_list)
+        -> refine_and_satisfy_chc ~config ~z3 sygus chc cex_list candidates
 
-let remove_ui_and_negate (ui : func) (query : chc) =
-  match Sexp.force_parse query.body with
-  | List [ (Atom "not") ; List ((Atom "and") :: conjuncts) ]
-    -> let ui_call_args = ref [] in
-       let solution_conjuncts =
-           List.filter conjuncts ~f:(function List ((Atom func_name) :: call_args)
-                                              when String.equal func_name ui.name
-                                              -> ui_call_args := call_args
-                                               ; List.iter call_args
-                                                           ~f:(function Atom _ -> ()
-                                                                      | _ -> raise (Internal_Exn "CHC in improper format!"))
-                                               ; false
-                                            | a -> true)
-        in if List.is_empty solution_conjuncts
-           then "false"
-           else begin
-             let solution_body =
-                 Transform.replace (List.map2_exn !ui_call_args ui.args
-                                                  ~f:(fun old_name (new_name,_) : Sexp.t
-                                                      -> List [ old_name ; (Atom new_name) ]))
-                                   (List [ (Atom "not") ; (List (Atom "and" :: solution_conjuncts)) ]) in
-             let solution_body = Sexp.to_string_hum solution_body
-              in if List.((length ui.args) = (length query.args))
-                 then solution_body
-                 else let qvars = List.(filter query.args ~f:(fun (a,_) -> not (mem !ui_call_args (Atom a) ~equal:Sexp.equal)))
-                       in "(forall ("
-                        ^ (List.to_string_map qvars ~sep:" " ~f:(fun (n,t) -> "(" ^ n ^ " " ^ (Type.to_string t) ^ ")"))
-                        ^ ") "
-                        ^ solution_body
-                        ^ ")"
-           end
-  | _ -> raise (Internal_Exn "CHC in improper format!")
+let rec solve_impl ?(config = Config.default) ~(z3 : ZProc.t) (sygus : SyGuS.t) (candidates : candidate array) : SyGuS.func list =
+  try Log.debug (lazy ("Checking validity of CHCs with current candidate interpretations ..."))
+    ; ensure_all_chcs_valid ~config ~z3 sygus candidates
+    ; Array.to_rev_list_map candidates ~f:(fun c -> { c.func with body = c.solution })
+  with
+    | CounterExamples (chc, cex_list)
+      -> refine_and_satisfy_chc ~config ~z3 sygus chc cex_list candidates
+           ; solve_impl ~config ~z3 sygus candidates
 
 let solve ?(config = Config.default) ~(zpath : string) (sygus : SyGuS.t) : SyGuS.func list =
   let cands = Array.map sygus.uninterpreted_functions

@@ -16,11 +16,11 @@ module Config = struct
   }
 
   let default : t = {
-    cost_limit = 128 ;
+    cost_limit = 15 ;
     cost_attribute = Size ;
     logic = Logic.of_string "LIA" ;
     max_expressiveness_level = 1024 ;
-    min_satisfaction = 1.0 ;
+    min_satisfaction = 0.95 ;
     order = (fun g_cost e_cost -> (Int.to_float e_cost) *. (Float.log (Int.to_float g_cost))) ;
   }
 end
