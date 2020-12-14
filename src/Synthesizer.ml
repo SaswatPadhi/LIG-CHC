@@ -16,11 +16,11 @@ module Config = struct
   }
 
   let default : t = {
-    cost_limit = 15 ;
+    cost_limit = 12 ;
     cost_attribute = Size ;
     logic = Logic.of_string "LIA" ;
     max_expressiveness_level = 1024 ;
-    min_satisfaction = 0.95 ;
+    min_satisfaction = 1.0 ;
     order = (fun g_cost e_cost -> (Int.to_float e_cost) *. (Float.log (Int.to_float g_cost))) ;
   }
 end
@@ -62,7 +62,9 @@ let evaluate_component_application (task : task) (comp : Expr.component) (args :
                                       | Some (name, t_dom, t_codom)
                                         -> begin match List.findi task.arg_names ~f:(fun _ -> String.equal name) with
                                              | None -> raise (Internal_Exn ("Cannot lambda-fy unknown variable: " ^ name))
-                                             | Some (j,_) -> { arg with expr = Expr.ImplicitLambda (j, t_dom, t_codom, arg.expr) }
+                                             | Some (j,_) -> if Expr.contains_variable arg.expr j
+                                                             then { arg with expr = Expr.ImplicitLambda (j, t_dom, t_codom, arg.expr) }
+                                                             else raise Exit
                                            end)
      in
     let select idx =

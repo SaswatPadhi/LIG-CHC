@@ -22,7 +22,7 @@ let all_supported =
                 [{
                    name = "ALIA" ;
                    (* FIXME: Determine levels of ArrayComponents for hybrid enumeration *)
-                   components_per_level = ArrayComponents.read_write_levels
+                   components_per_level = ArrayComponents.read_only_levels
                                        ** BooleanComponents.levels
                                        ** IntegerComponents.linear_levels ;
                    sample_set_size_multiplier = 2 ;
@@ -31,7 +31,7 @@ let all_supported =
                    name = "ALL" ;
                    (* FIXME: The verification side for lists, especially with transformed components,
                              doesn't work as of now -- we need to emit valid SMTLIB expressions for them *)
-                   components_per_level = ArrayComponents.read_write_levels
+                   components_per_level = ArrayComponents.read_only_levels
                                        ** BooleanComponents.levels
                                        ** IntegerComponents.non_linear_levels
                                        ** BitVecComponents.levels
@@ -41,7 +41,7 @@ let all_supported =
                 } ; {
                    name = "ANIA" ;
                    (* FIXME: Determine levels of ArrayComponents for hybrid enumeration *)
-                   components_per_level = ArrayComponents.read_write_levels
+                   components_per_level = ArrayComponents.read_only_levels
                                        ** BooleanComponents.levels
                                        ** IntegerComponents.non_linear_levels ;
                    sample_set_size_multiplier = 8 ;

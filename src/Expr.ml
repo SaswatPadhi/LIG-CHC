@@ -58,13 +58,16 @@ end
   let len_a = Array.length a
    in Array.(init (len_a + 1) ~f:(fun i -> if i < len_a then a.(i) else ((last a) @ l))) *)
 
-let rec contains_free_ghost ghosts expr =
+let rec contains_variable expr v =
   let rec helper = function
     | FCall (_, exprs) -> List.iter ~f:helper exprs
-    | Var i -> if List.mem ghosts i ~equal:Int.equal then raise Caml.Exit
+    | Var i -> if Int.equal i v then raise Caml.Exit
     | _ -> ()
   in try helper expr ; false
      with Caml.Exit -> true
+
+let rec contains_free_ghost ghosts expr =
+  List.exists ghosts ~f:(contains_variable expr)
 
 let rec equal e1 e2 =
   match e1, e2 with

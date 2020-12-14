@@ -59,23 +59,21 @@ let bounded_int_quantifiers = reads @ [
     MakeComponent.base with
     name = "array-bounded-int-forall";
     codomain = Type.(BOOL);
-    domain = Type.[INT; INT; BOOL];
+    domain = Type.[INT; BOOL];
     check_arg_ASTs = (function
-                         | [ lb_expr ; ub_expr ; p ]
-                           -> (size lb_expr) <= max_bound_expr_size
-                           && (size ub_expr) <= max_bound_expr_size
-                           && (not (uses_array_component lb_expr))
+                         | [ ub_expr ; p ]
+                           -> (size ub_expr) <= max_bound_expr_size
                            && (not (uses_array_component ub_expr))
                            && uses_array_component p
                          | _ -> false);
-    callable_args = [ (2, (ghost_variable_name, INT, BOOL)) ];
+    callable_args = [ (1, (ghost_variable_name, INT, BOOL)) ];
     evaluate = Value.(fun [@warning "-8"]
-                      [(Int lb) ; (Int ub) ; Fun_ (INT, BOOL, pred)]
-                      -> if ub < lb then (Bool true) else (
-                           Bool List.(for_all (range ~stride:1 ~start:`inclusive ~stop:`inclusive lb ub)
+                      [(Int ub) ; Fun_ (INT, BOOL, pred)]
+                      -> if ub < 0 then (Bool true) else (
+                           Bool List.(for_all (range ~stride:1 ~start:`inclusive ~stop:`exclusive 0 ub)
                                               ~f:(fun i -> Value.(equal (pred (Int i)) (Bool true))))));
-    to_string = (fun [@warning "-8"] [lb ; ub ; pred]
-                 -> "(forall ((" ^ ghost_variable_name ^ " Int)) (=> (and (<= " ^ lb ^ " " ^ ghost_variable_name ^ ") (<= " ^ ghost_variable_name ^ " " ^ ub ^ ")) " ^ pred ^ "))")
+    to_string = (fun [@warning "-8"] [ub ; pred]
+                 -> "(forall ((" ^ ghost_variable_name ^ " Int)) (=> (and (<= 0 " ^ ghost_variable_name ^ ") (< " ^ ghost_variable_name ^ " " ^ ub ^ ")) " ^ pred ^ "))")
   }
 ]
 

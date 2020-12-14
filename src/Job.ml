@@ -44,9 +44,10 @@ let has_neg_test ~(job : t) (test : Value.t list) : bool =
 
 let add_pos_test ~(job : t) (test : Value.t list) : t =
   if has_pos_test ~job test
-  then raise (Duplicate_Test ("New POS test (" ^ (String.concat ~sep:"," job.arg_names)
+  then job
+       (* raise (Duplicate_Test ("New POS test (" ^ (String.concat ~sep:"," job.arg_names)
                              ^ ") = (" ^ (List.to_string_map ~sep:"," ~f:Value.to_string test)
-                             ^ "), already exists in POS set!"))
+                             ^ "), already exists in POS set!")) *)
   else if has_neg_test ~job test
   then raise (Ambiguous_Test ("New POS test (" ^ (String.concat ~sep:"," job.arg_names)
                              ^ ") = (" ^ (List.to_string_map ~sep:"," ~f:Value.to_string test)
@@ -58,9 +59,10 @@ let add_pos_test ~(job : t) (test : Value.t list) : t =
 
 let add_neg_test ~(job : t) (test : Value.t list) : t =
   if has_neg_test ~job test
-  then raise (Duplicate_Test ("New NEG test (" ^ (String.concat ~sep:"," job.arg_names)
+  then job
+       (* raise (Duplicate_Test ("New NEG test (" ^ (String.concat ~sep:"," job.arg_names)
                              ^ ") = (" ^ (List.to_string_map ~sep:"," ~f:Value.to_string test)
-                             ^ ") already exists in NEG set!"))
+                             ^ ") already exists in NEG set!")) *)
   else if has_pos_test ~job test
   then raise (Ambiguous_Test ("New NEG test (" ^ (String.concat ~sep:"," job.arg_names)
                              ^ ") = (" ^ (List.to_string_map ~sep:"," ~f:Value.to_string test)

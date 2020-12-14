@@ -79,13 +79,16 @@ let more_counterexamples_exist ?(config = Config.default) ~(z3 : ZProc.t) ~(db :
                                                  let template_db = (
                                                        concat_map array_variables
                                                                   ~f:(fun [@warning "-8"] (name, Type.ARRAY (k_type, v_type))
-                                                                      -> ("(declare-const _" ^ name ^ "_template_default_var_ " ^ (Type.to_string v_type) ^ ")")
-                                                                      :: (concat_map template_size_range
-                                                                                     ~f:(fun i -> [ ("(declare-const _" ^ name ^ "_template_k_var_" ^ (Int.to_string i) ^ "_ " ^ (Type.to_string v_type) ^ ")")
-                                                                                                  ; ("(declare-const _" ^ name ^ "_template_v_var_" ^ (Int.to_string i) ^ "_ " ^ (Type.to_string v_type) ^ ")") ])))
+                                                                      -> (concat_map template_size_range
+                                                                                     ~f:(fun i -> let i = (Int.to_string i)
+                                                                                                   in [ ("(declare-const _" ^ name ^ "_template_k_var_" ^ i ^ "_ " ^ (Type.to_string k_type) ^ ")")
+                                                                                                      ; ("(declare-const _" ^ name ^ "_template_v_var_" ^ i ^ "_ " ^ (Type.to_string v_type) ^ ")")
+                                                                                                      ; ("(assert (and (<= 0 _" ^ name ^ "_template_k_var_" ^ i ^ "_) (<=  _" ^ name ^ "_template_k_var_" ^ i ^ "_ 3)))")
+                                                                                                      ; ("(assert (and (<= 0 _" ^ name ^ "_template_v_var_" ^ i ^ "_) (<=  _" ^ name ^ "_template_v_var_" ^ i ^ "_ 3)))")
+                                                                                                      ])))
                                                  ) in let template_constraints = map array_variables
                                                                                   ~f:(fun (v,t) -> "(assert (= " ^ v ^ " "
-                                                                                                 ^ (fold template_size_range ~init:("((as const " ^ (Type.to_string t) ^ ") _" ^ v ^ "_template_default_var_)")
+                                                                                                 ^ (fold template_size_range ~init:("((as const " ^ (Type.to_string t) ^ ") -1024)")
                                                                                                                        ~f:(fun acc i -> "(store " ^ acc ^ " _" ^ v ^ "_template_k_var_" ^ (Int.to_string i) ^ "_ _" ^ v ^ "_template_v_var_" ^ (Int.to_string i) ^ "_)"))
                                                                                                  ^ "))")
                                                        in ZProc.create_scope z3
