@@ -21,7 +21,7 @@ module Config = struct
     base_random_seed = "LoopInvGen" ;
     describe = PIE.cnf_opt_to_desc ;
     max_array_template_size = 8 ;
-    max_counterexamples = 1 ;
+    max_counterexamples = 16 ;
     user_features = [] ;
   }
 end
@@ -200,12 +200,12 @@ let solve ?(config = Config.default) ~(zpath : string) (sygus : SyGuS.t) : SyGuS
         ~random_seed:(Some (Int.to_string (Quickcheck.(random_value ~seed:(`Deterministic config.base_random_seed)
                                                                     (Generator.small_non_negative_int)))))
         (fun z3 -> SyGuS.setup_z3 sygus z3
-                 ; Array.iteri cands
+                 (* ; Array.iteri cands
                               ~f:(fun i cand
                                   -> cands.(i) <- {
                                        cands.(i) with
                                        job = (List.fold (snd sygus.uninterpreted_functions.(i))
                                                         ~init:cands.(i).job
                                                         ~f:(fun job e -> Log.debug (lazy ("Extracted feature during preprocessing: " ^ e))
-                                                                       ; Job.add_feature ~job ((ZProc.build_feature ~z3 (List.map ~f:fst cand.func.args) e), e))) })
+                                                                       ; Job.add_feature ~job ((ZProc.build_feature ~z3 (List.map ~f:fst cand.func.args) e), e))) }) *)
                  ; solve_impl ~config ~z3 sygus cands)
